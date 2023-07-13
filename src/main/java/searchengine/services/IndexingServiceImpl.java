@@ -41,21 +41,10 @@ public class IndexingServiceImpl implements IndexingService {
 
     @Override
     public DefaultResponse startIndexing() {
-        sites.getSites()
-                .stream()
-                .map(searchengine.config.Site::getUrl)
-                .forEach(url -> {
-                    pageRepository.findAll().forEach(page -> {
-                        if (page.getPath().contains(url)) {
-                            pageRepository.deleteById(page.getId());
-                        }
-                    });
-                    siteRepository.findAll().forEach(site -> {
-                        if (site.getUrl().contains(url)) {
-                            siteRepository.deleteById(site.getId());
-                        }
-                    });
-                });
+
+        clearDataByUrlList();
+
+
 
 
 //        Site site = new Site();
@@ -74,5 +63,23 @@ public class IndexingServiceImpl implements IndexingService {
         return new DefaultResponse();
 //        return new ErrorResponse("ошика 111");
 
+    }
+
+    private void clearDataByUrlList() {
+        sites.getSites()
+                .stream()
+                .map(searchengine.config.Site::getUrl)
+                .forEach(url -> {
+                    pageRepository.findAll().forEach(page -> {
+                        if (page.getPath().contains(url)) {
+                            pageRepository.deleteById(page.getId());
+                        }
+                    });
+                    siteRepository.findAll().forEach(site -> {
+                        if (site.getUrl().contains(url)) {
+                            siteRepository.deleteById(site.getId());
+                        }
+                    });
+                });
     }
 }
