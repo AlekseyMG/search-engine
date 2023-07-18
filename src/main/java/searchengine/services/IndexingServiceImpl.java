@@ -85,10 +85,23 @@ public class IndexingServiceImpl implements IndexingService {
                 dataSite.setLastError("");
                 dataSite.setStatusTime(LocalDateTime.now());
                 siteRepository.saveAndFlush(dataSite);
+                WebParser webParser = new WebParser(
+                        site.getUrl(),
+                        dataSite,
+                        pageRepository,
+                        siteRepository,
+                        site.getUrl(),
+                        Collections.synchronizedSet(new HashSet<>())
+                );
+                //try {
+                    ForkJoinPool pool = new ForkJoinPool();
+                    pool.invoke(webParser);
+                //} catch (Exception ex) {
+//                    dataSite.setLastError(ex.toString());
+//                    System.out.println("+++++" + ex + "++++++");
+                //}
+                //String links = pool.invoke(webParser);
 
-                WebParser webParser = new WebParser(site.getUrl(), dataSite, pageRepository, siteRepository, new HashSet<>());
-                ForkJoinPool pool = new ForkJoinPool();
-                String links = pool.invoke(webParser);
                 dataSite.setStatus(StatusType.INDEXED);
                 dataSite.setStatusTime(LocalDateTime.now());
                 siteRepository.saveAndFlush(dataSite);
@@ -105,13 +118,19 @@ public class IndexingServiceImpl implements IndexingService {
                     String shortUrl = url
                             .replaceAll("https://", "")
                             .replaceAll("www.", "");
+                    System.out.println(shortUrl);
                     pageRepository.findAll().forEach(page -> {
+                        System.out.println("page " + page.getPath() + " - shortUrl " + shortUrl);
                         if (page.getPath().contains(shortUrl)) {
+                            System.out.println("DELETE " + shortUrl);
                             pageRepository.deleteById(page.getId());
                         }
                     });
                     siteRepository.findAll().forEach(site -> {
+                        System.out.println("site " + site.getUrl() + " - shortUrl " + shortUrl);
+
                         if (site.getUrl().contains(shortUrl)) {
+                            System.out.println("DELETE " + shortUrl);
                             siteRepository.deleteById(site.getId());
                         }
                     });
