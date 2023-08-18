@@ -56,7 +56,7 @@ public class WebParser extends RecursiveTask<String> {
             page.setSite(currentSite);
             page.setContent(htmlDoc.text());
             pageRepository.saveAndFlush(page);
-            currentSite.setLastError(errorMessage);
+            if (!errorMessage.equals("")) currentSite.setLastError(errorMessage);
             currentSite.setStatusTime(LocalDateTime.now());
             siteRepository.saveAndFlush(currentSite);
 
@@ -96,7 +96,7 @@ public class WebParser extends RecursiveTask<String> {
             response = connection
                     .userAgent(userAgent)
                     .timeout(3000)
-                    .ignoreHttpErrors(false)
+                    .ignoreHttpErrors(true)
                     .execute();
             htmlDoc = connection.get();
             statusCode = response == null ? 0 : response.statusCode();
@@ -110,20 +110,27 @@ public class WebParser extends RecursiveTask<String> {
                         !url.contains("@") &&
                         !url.contains(".com") &&
                         !url.contains("img") &&
-                        rootLinks.stream().noneMatch(s -> s.equals(url))
+                        !rootLinks.contains(url)
+                        //rootLinks.stream().noneMatch(s -> s.equals(url))
                 ) {
                     links.add(url);
                 }
 
             }
         } catch (Exception ex) {
+            System.out.println((response == null ? "" : response.statusMessage()) + ex);
             //ex.printStackTrace();
-            errorMessage = response == null ? "" : response.statusMessage() + ex;
+            if (response != null) {
+                errorMessage = response.statusMessage().equals("OK") ? "" : response.statusMessage() + " ";
+                statusCode = response.statusCode();
+            }
+            errorMessage += ex;
+            //System.out.println(ex);
 //            Page page = new Page();
 //            page.setPath(root);
 //            page.setCode(statusCode);
 //            page.setSite(currentSite);
-//            page.setContent(htmlDoc.text());
+//            page.setContent("");
 //            pageRepository.saveAndFlush(page);
 //            //}
 //            currentSite.setLastError(statusCode + " - " + (response == null ? "" : response.statusMessage()) + " - " + ex);
