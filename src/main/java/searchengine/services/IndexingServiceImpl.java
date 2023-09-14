@@ -76,38 +76,44 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void indexingAllSitesFromConfig() {
+        //new Thread(()-> {
         sites.getSites().forEach(site -> {
             new Thread(()-> {
-                Site dataSite = new Site();
-                dataSite.setName(site.getName());
-                dataSite.setUrl(site.getUrl());
-                dataSite.setStatus(StatusType.INDEXING);
-                dataSite.setLastError("");
-                dataSite.setStatusTime(LocalDateTime.now());
-                siteRepository.saveAndFlush(dataSite);
+                Site newSite = new Site();
+                newSite.setName(site.getName());
+                newSite.setUrl(site.getUrl());
+                newSite.setStatus(StatusType.INDEXING);
+                newSite.setLastError("");
+                newSite.setStatusTime(LocalDateTime.now());
+                siteRepository.saveAndFlush(newSite);
                 WebParser webParser = new WebParser(
                         site.getUrl(),
-                        dataSite,
+                        newSite,
                         pageRepository,
                         siteRepository,
                         site.getUrl(),
                         Collections.synchronizedSet(new HashSet<>())
                 );
-                //try {
+                try {
                     ForkJoinPool pool = new ForkJoinPool();
                     pool.invoke(webParser);
-                //} catch (Exception ex) {
-//                    dataSite.setLastError(ex.toString());
-//                    System.out.println("+++++" + ex + "++++++");
-                //}
+                } catch (Exception ex) {
+                    newSite.setLastError("+++++" + ex.toString() + "++++++");
+                    System.out.println("+++++" + ex + "++++++");
+                    newSite.setStatus(StatusType.FAILED);
+                } finally {
+                    newSite.setStatus(StatusType.INDEXED);
+                }
                 //String links = pool.invoke(webParser);
 
-                dataSite.setStatus(StatusType.INDEXED);
-                dataSite.setStatusTime(LocalDateTime.now());
-                siteRepository.saveAndFlush(dataSite);
+                newSite.setStatusTime(LocalDateTime.now());
+                siteRepository.saveAndFlush(newSite);
                 //System.out.println("ГОТОВО" + links.substring(0,10));
             }).start();
         });
+            System.out.println("ГОТОВО");
+        //}).start();
+        System.out.println("ГОТОВО");
     }
 
     private void clearDataByUrlList() {
