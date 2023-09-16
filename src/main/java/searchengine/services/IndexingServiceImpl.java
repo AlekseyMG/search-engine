@@ -3,6 +3,7 @@ package searchengine.services;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import searchengine.config.ParserSetting;
 import searchengine.dto.indexing.WebParser;
 import searchengine.model.Page;
 import searchengine.model.Site;
@@ -34,16 +35,54 @@ public class IndexingServiceImpl implements IndexingService {
 //информацию о произошедшей ошибке
     private String pageUrl;
     private final SitesList sites;
+    private final ParserSetting parserSetting;
+    public volatile boolean isRunning = false;
     @Autowired
     private final PageRepository pageRepository;
     @Autowired
     private final SiteRepository siteRepository;
+    List<Thread> threads = new ArrayList<>();
+    List<WebParser> webParsers = new ArrayList<>();
+    ForkJoinPool pool;
 
     @Override
-    public DefaultResponse startIndexing() {
+    public DefaultResponse stopIndexing() {
+//        System.out.println("************************************************************");
+//        System.out.println("************           ОСТАНОВКА           *****************");
+//        threads.forEach(Thread::interrupt);
+//        threads.forEach(thread -> System.out.println(thread.isInterrupted()));
+//        webParsers.forEach(webParser -> {
+////            webParser.isRunning = false;
+////            webParser.stop();
+//            System.out.println("ОСТАНОВКА");
+//            webParser.cancel(true);
+//        });
+//        isRunning = false;
+//        try {
+//            pool.wait(5000);
+//            pool.shutdownNow();
+//        } catch (Exception ex) {
+//            System.out.println("ОШИБКА " + ex);
+//        }
+        //pool.shutdown();
+//        System.out.println("************************************************************");
+        isRunning = false;
+//        System.out.println("1 pool.isShutdown: " + pool.isShutdown());
+        while (pool.getActiveThreadCount() > 0) {}
 
-        clearDataByUrlList();
-        indexingAllSitesFromConfig();
+            //pool.shutdown();
+//            System.out.println("2 pool.isShutdown: " + pool.getActiveThreadCount());
+//        }
+
+        //System.out.println("pool.isShutdown");
+        pool.shutdown();
+        return new DefaultResponse();
+    }
+    @Override
+    public DefaultResponse startIndexing() {
+        isRunning = true;
+        clearDataByUrlList();             //ВКЛЮЧИТЬ!!!
+        indexingAllSitesFromConfig();     //ВКЛЮЧИТЬ!!!
 
 //        Set<String> linksSet = new TreeSet<>(new Comparator<String>() {
 //            @Override
@@ -76,8 +115,13 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void indexingAllSitesFromConfig() {
-        //new Thread(()-> {
+        if (!threads.isEmpty()) {
+            threads.forEach(Thread::interrupt);
+            threads = new ArrayList<>();
+        }
         sites.getSites().forEach(site -> {
+            threads.add(
+
             new Thread(()-> {
                 Site newSite = new Site();
                 newSite.setName(site.getName());
@@ -92,10 +136,13 @@ public class IndexingServiceImpl implements IndexingService {
                         pageRepository,
                         siteRepository,
                         site.getUrl(),
-                        Collections.synchronizedSet(new HashSet<>())
+                        parserSetting,
+                        this
                 );
+                webParsers.add(webParser);
                 try {
-                    ForkJoinPool pool = new ForkJoinPool();
+                    //ForkJoinPool pool = new ForkJoinPool();
+                    pool = new ForkJoinPool();
                     pool.invoke(webParser);
                 } catch (Exception ex) {
                     newSite.setLastError("+++++" + ex.toString() + "++++++");
@@ -109,34 +156,53 @@ public class IndexingServiceImpl implements IndexingService {
                 newSite.setStatusTime(LocalDateTime.now());
                 siteRepository.saveAndFlush(newSite);
                 //System.out.println("ГОТОВО" + links.substring(0,10));
-            }).start();
+            })//.start();
+            );
         });
-            System.out.println("ГОТОВО");
-        //}).start();
-        System.out.println("ГОТОВО");
+            threads.forEach(Thread::start);
+        //    System.out.println("ГОТОВО");
+        //System.out.println("ГОТОВО");
     }
 
+    /** !! СДЕЛАНО !!
+     * продумать удаление всех страниц из таблицы page по id сайта одним запросом к базе
+    **/
     private void clearDataByUrlList() {
+        //threads.forEach(Thread::interrupt);
+
         sites.getSites()
                 .stream()
                 .map(searchengine.config.Site::getUrl)
                 .forEach(url -> {
                     String shortUrl = url
-                            .replaceAll("https://", "")
-                            .replaceAll("www.", "");
-                    System.out.println(shortUrl);
-                    pageRepository.findAll().forEach(page -> {
-                        System.out.println("page " + page.getPath() + " - shortUrl " + shortUrl);
-                        if (page.getPath().contains(shortUrl)) {
-                            System.out.println("DELETE " + shortUrl);
-                            pageRepository.deleteById(page.getId());
-                        }
-                    });
+                            //.replaceAll("https://", "")
+                            .replaceAll("www.", "") + "/";
+//                    System.out.println(shortUrl);
+//                    System.out.println("++++++++++++++\n".repeat(3));
+                    //System.out.println("pageRepository.findBySitePath(url) = " + pageRepository.findByPath(url));
+//                    System.out.println("pageRepository.findByPath(url) = " + pageRepository.findByPath(shortUrl));
+//                    System.out.println("++++++++++++++\n".repeat(3));
+                    //Page page = pageRepository.findByPath(url);
+//                    System.out.println("path LIKE -");
+                    //pageRepository.findAllByPath(shortUrl).forEach(page -> System.out.println("path LIKE -" + page + "\n"));
+                    if (pageRepository.findByPath(shortUrl) != null) {
+                        pageRepository.deleteBySitePath(shortUrl);
+                    }
+//                    if (siteRepository.findByPath(url) != null) {
+//                        siteRepository.deleteBySitePath(url);
+//                    }
+//                    pageRepository.findAll().forEach(page -> {
+//                        System.out.println("page " + page.getPath() + " - shortUrl " + shortUrl);
+//                        if (page.getPath().contains(shortUrl)) {
+//                            System.out.println("DELETE " + shortUrl);
+//                            pageRepository.deleteById(page.getId());
+//                        }
+//                    });
                     siteRepository.findAll().forEach(site -> {
-                        System.out.println("site " + site.getUrl() + " - shortUrl " + shortUrl);
+                        //System.out.println("site " + site.getUrl() + " - shortUrl " + shortUrl);
 
                         if (site.getUrl().contains(shortUrl)) {
-                            System.out.println("DELETE " + shortUrl);
+                          //  System.out.println("DELETE " + shortUrl);
                             siteRepository.deleteById(site.getId());
                         }
                     });

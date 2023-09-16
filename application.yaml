@@ -25,3 +25,7 @@ indexing-settings:
       name: PlayBack.Ru
     - url: https://www.dfhdh.ru
       name: dfhdh.Ru
+
+parser-setting:
+  user-agent: LocoBOT/0.0.2 (indexing and search engine) #"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36";
+  referrer: https://google.ru
