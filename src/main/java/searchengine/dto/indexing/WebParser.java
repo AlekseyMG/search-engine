@@ -5,13 +5,17 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.dao.DataIntegrityViolationException;
 import searchengine.config.ParserSetting;
 import searchengine.model.Page;
 import searchengine.model.Site;
+import searchengine.model.StatusType;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 import searchengine.services.IndexingServiceImpl;
 
+import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.RecursiveTask;
@@ -61,10 +65,18 @@ public class WebParser extends RecursiveTask<String> {
     @Override
     protected String compute() {
         //System.out.println(indexingServiceImpl.isRunning);
+        if (!indexingServiceImpl.isRunning) {
+            currentSite.setStatus(StatusType.FAILED);
+            currentSite.setLastError("Прервано пользователем");
+            siteRepository.saveAndFlush(currentSite);
+            return "";
+        }
 
-        if (!indexingServiceImpl.isRunning) return "";
         Set<String> links = getLinks();
-        if (!indexingServiceImpl.isRunning) return "";
+
+
+
+        //if (!indexingServiceImpl.isRunning) return "";
 
         if (links.isEmpty()) {
             //Page page = new Page();
@@ -73,6 +85,8 @@ public class WebParser extends RecursiveTask<String> {
             //page.setPath(root);
             page.setCode(statusCode);
             page.setSite(currentSite);
+            //page.setSite(currentSite.getId());
+
             page.setContent(htmlDoc.text());
 
             pageRepository.saveAndFlush(page);
@@ -132,6 +146,12 @@ public class WebParser extends RecursiveTask<String> {
             htmlDoc = connection.get();
             statusCode = response == null ? 0 : response.statusCode();
 
+//            if (!indexingServiceImpl.isRunning) {
+//                currentSite.setStatus(StatusType.FAILED);
+//                siteRepository.saveAndFlush(currentSite);
+//                return links;
+//            }
+
             Elements htmlLinks = htmlDoc.select("a[href]");
             String url = "";
             //boolean pageIsNotExist = false; //pageRepository.findByPath(url) != null;
@@ -180,6 +200,7 @@ public class WebParser extends RecursiveTask<String> {
                         Page emptyPage = new Page();
                         emptyPage.setCode(0);
                         emptyPage.setSite(currentSite);
+                        //emptyPage.setSite(currentSite.getId());
                         emptyPage.setPath(url);
                         emptyPage.setContent("");
                         pageRepository.saveAndFlush(emptyPage);
@@ -189,8 +210,8 @@ public class WebParser extends RecursiveTask<String> {
                 }
 
             }
-        } catch (Exception ex) {
-            System.out.println((response == null ? "" : response.statusMessage()) + ex + " URL: " + root);
+        } catch (SocketTimeoutException ex) {
+            System.out.println((response == null ? "" : response.statusMessage()) + " " + ex + " URL: " + root);
             //ex.printStackTrace();
             if (response != null) {
                 errorMessage = response.statusMessage().equals("OK") ? "" : response.statusMessage() + " ";
@@ -200,7 +221,7 @@ public class WebParser extends RecursiveTask<String> {
                 statusCode = 522;
             if (ex.toString().contains("Read timed out"))
                 statusCode = 598;
-            errorMessage += ex + " URL: " + root;
+            errorMessage = "Превышен интервал ожидания страницы: " + root;
             //System.out.println(errorMessage);
 //            Page page = new Page();
 //            page.setPath(root);
@@ -212,7 +233,14 @@ public class WebParser extends RecursiveTask<String> {
 //            currentSite.setLastError(statusCode + " - " + (response == null ? "" : response.statusMessage()) + " - " + ex);
 //            currentSite.setStatusTime(LocalDateTime.now());
 //            siteRepository.saveAndFlush(currentSite);
+        } catch (InterruptedException ex) {
+            errorMessage = "Прервано пользователем";
+        } catch (IOException ex) {
+            errorMessage = "Ошибка ввода/вывода";
+        } catch (DataIntegrityViolationException ex) {
+            errorMessage = "Ошибка добавления записи в БД" + (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
         }
+
 //        System.out.println("-------------------------------------");
 //        links.forEach(link -> System.out.println("--- " + link));
 //        System.out.println("-------------------------------------");

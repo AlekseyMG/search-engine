@@ -3,6 +3,9 @@ package searchengine.model;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import java.time.LocalDateTime;
 @Data
 @Entity
@@ -39,4 +42,16 @@ public class Site {
 
     @Column(nullable = false)
     private String name;
+
+    @OneToMany(cascade = CascadeType.ALL, mappedBy="site", orphanRemoval = true)
+    //@JoinColumn(name = "site_id")
+    private List<Page> pages = new ArrayList<>();
+    public void addPage(Page page) {
+        pages.add(page);
+        page.setSite(this);
+    }
+    public void removePage(Page page) {
+        pages.remove(page);
+        page.setSite(null);
+    }
 }

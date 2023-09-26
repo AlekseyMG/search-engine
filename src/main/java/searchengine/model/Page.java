@@ -23,8 +23,8 @@ public class Page {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
-    @ManyToOne//(cascade = CascadeType.ALL)
-    @JoinColumn(name = "site_id", referencedColumnName = "id")//, insertable = false, updatable = false)
+    @ManyToOne(fetch = FetchType.LAZY)//(cascade = CascadeType.ALL)
+    //@JoinColumn(name = "site_id", referencedColumnName = "id")//, insertable = false, updatable = false)
     private Site site;
 
 

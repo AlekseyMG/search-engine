@@ -34,7 +34,8 @@ public class IndexingServiceImpl implements IndexingService {
 //○ если произошла ошибка и обход завершить не удалось, изменять
 //статус на FAILED и вносить в поле last_error понятную
 //информацию о произошедшей ошибке
-    private String pageUrl;
+
+ //   private String pageUrl;
     private final SitesList sites;
     private final ParserSetting parserSetting;
     public volatile boolean isRunning = false;
@@ -51,6 +52,15 @@ public class IndexingServiceImpl implements IndexingService {
         isRunning = false;
         while (pool.getActiveThreadCount() > 0) {}
         pool.shutdown();
+        threads.forEach(Thread::interrupt);
+//        siteRepository.findAll().forEach(site -> {
+//            if (site.getStatus().equals(StatusType.INDEXING)) {
+//                site.setStatus(StatusType.FAILED);
+//                site.setLastError("Прервано пользователем");
+//                siteRepository.saveAndFlush(site);
+//            }
+//        });
+        //siteRepository.findAll().forEach(site -> site.getPages().forEach(page -> System.out.println(page.getPath())));
         return new DefaultResponse();
     }
     @Override
@@ -119,12 +129,19 @@ public class IndexingServiceImpl implements IndexingService {
                     try {
                         pool = new ForkJoinPool();
                         pool.invoke(webParser);
-                    } catch (Exception ex) {
-                        newSite.setLastError("+++++" + ex.toString() + "++++++");
-                        System.out.println("+++++" + ex + "++++++");
+                    } catch (NullPointerException ex) {
+                        newSite.setLastError("Ошибка индексации: Сайт недоступен");
+                        System.out.println("+++++ " + ex + " ++++++");
                         newSite.setStatus(StatusType.FAILED);
-                    } finally {
-                        newSite.setStatus(StatusType.INDEXED);
+                    } catch (Exception ex) {
+                        newSite.setLastError("Ошибка индексации: " + ex);
+                        System.out.println("+++++ " + ex + " ++++++");
+                        newSite.setStatus(StatusType.FAILED);
+                    }
+                    finally {
+                        if (newSite.getStatus().equals(StatusType.INDEXING) && isRunning) {
+                            newSite.setStatus(StatusType.INDEXED);
+                        }
                     }
                     newSite.setStatusTime(LocalDateTime.now());
                     siteRepository.saveAndFlush(newSite);
