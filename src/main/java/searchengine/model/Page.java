@@ -21,10 +21,10 @@ public class Page {
     //● content MEDIUMTEXT NOT NULL — контент страницы (HTML-код).
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+    private long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)//(cascade = CascadeType.ALL)
-    //@JoinColumn(name = "site_id", referencedColumnName = "id")//, insertable = false, updatable = false)
+    @ManyToOne(fetch = FetchType.EAGER)//(cascade = CascadeType.ALL)
+    @JoinColumn(name = "site_id", referencedColumnName = "id")//, insertable = false, updatable = false)
     private Site site;
 
 

@@ -35,7 +35,6 @@ public class IndexingServiceImpl implements IndexingService {
 //статус на FAILED и вносить в поле last_error понятную
 //информацию о произошедшей ошибке
 
- //   private String pageUrl;
     private final SitesList sites;
     private final ParserSetting parserSetting;
     public volatile boolean isRunning = false;
@@ -44,7 +43,6 @@ public class IndexingServiceImpl implements IndexingService {
     @Autowired
     private final SiteRepository siteRepository;
     List<Thread> threads = new ArrayList<>();
-//    List<WebParser> webParsers = new ArrayList<>();
     ForkJoinPool pool;
 
     @Override
@@ -53,14 +51,7 @@ public class IndexingServiceImpl implements IndexingService {
         while (pool.getActiveThreadCount() > 0) {}
         pool.shutdown();
         threads.forEach(Thread::interrupt);
-//        siteRepository.findAll().forEach(site -> {
-//            if (site.getStatus().equals(StatusType.INDEXING)) {
-//                site.setStatus(StatusType.FAILED);
-//                site.setLastError("Прервано пользователем");
-//                siteRepository.saveAndFlush(site);
-//            }
-//        });
-        //siteRepository.findAll().forEach(site -> site.getPages().forEach(page -> System.out.println(page.getPath())));
+
         return new DefaultResponse();
     }
     @Override
@@ -71,31 +62,6 @@ public class IndexingServiceImpl implements IndexingService {
         isRunning = true;
         clearDataByUrlList();             //ВКЛЮЧИТЬ!!!
         indexingAllSitesFromConfig();     //ВКЛЮЧИТЬ!!!
-
-//        Set<String> linksSet = new TreeSet<>(new Comparator<String>() {
-//            @Override
-//            public int compare(String s1, String s2) {
-//                return s1.trim().compareTo(s2.trim());
-//            }
-//        });
-//        linksSet.addAll(Arrays.asList(links.split("\n")));
-//        linksSet.forEach(System.out::println);
-
-
-
-
-//        Site site = new Site();
-//        site.setName(sites.getSites().get(0).getName());
-//        site.setUrl(sites.getSites().get(0).getUrl());
-//        site.setStatus(StatusType.INDEXED);
-//        site.setLastError("vse norm");
-//        site.setStatusTime(LocalDateTime.now());
-//        Page page = new Page();
-//        page.setCode(200);
-//        page.setSite(site);
-//        page.setPath(site.getUrl());
-//        page.setContent("fignya");
-//        pageRepository.saveAndFlush(page);
 
         return new DefaultResponse();
 //        return new ErrorResponse("ошика 111");
@@ -116,9 +82,15 @@ public class IndexingServiceImpl implements IndexingService {
                     newSite.setStatus(StatusType.INDEXING);
                     newSite.setLastError("");
                     newSite.setStatusTime(LocalDateTime.now());
+                    Page page = new Page();
+                    page.setSite(newSite);
+                    page.setCode(0);
+                    page.setContent("");
+                    page.setPath("/");
                     siteRepository.saveAndFlush(newSite);
+                    pageRepository.saveAndFlush(page);
                     WebParser webParser = new WebParser(
-                            site.getUrl(),
+                            site.getUrl() + "/",
                             newSite,
                             pageRepository,
                             siteRepository,
@@ -127,7 +99,7 @@ public class IndexingServiceImpl implements IndexingService {
                             this
                     );
                     try {
-                        pool = new ForkJoinPool();
+                        pool = new ForkJoinPool(4);
                         pool.invoke(webParser);
                     } catch (NullPointerException ex) {
                         newSite.setLastError("Ошибка индексации: Сайт недоступен");
@@ -160,7 +132,7 @@ public class IndexingServiceImpl implements IndexingService {
                     String shortUrl = url
                             .replaceAll("https://", "")
                             .replaceAll("www.", "");
-                    pageRepository.deleteBySitePath(shortUrl);
+                    //pageRepository.deleteBySitePath(shortUrl);
                     siteRepository.findAll().forEach(site -> {
                         if (site.getUrl().contains(shortUrl)) {
                             siteRepository.deleteById(site.getId());
