@@ -147,10 +147,14 @@ public class WebParser extends RecursiveTask<String> {
             if (ex.toString().contains("Read timed out"))
                 statusCode = 598;
             errorMessage = "Превышен интервал ожидания страницы: " + root;
+            if (root.equals(siteUrl)) {
+                currentSite.setStatus(StatusType.FAILED);
+            }
         } catch (InterruptedException ex) {
             errorMessage = "Прервано пользователем";
         } catch (IOException ex) {
-            errorMessage = "Ошибка ввода/вывода";
+            errorMessage = "Ошибка ввода/вывода или сайт недоступен " + root;
+            currentSite.setStatus(StatusType.FAILED);
         } catch (DataIntegrityViolationException ex) {
             errorMessage = "Ошибка добавления записи в БД" + (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
         }
