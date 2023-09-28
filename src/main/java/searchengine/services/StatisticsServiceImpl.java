@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 import searchengine.config.SitesList;
 import searchengine.dto.statistics.DetailedStatisticsItem;
 import searchengine.dto.statistics.StatisticsData;
-import searchengine.dto.statistics.StatisticsResponse;
+import searchengine.api.response.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
@@ -38,7 +38,8 @@ public class StatisticsServiceImpl implements StatisticsService {
             DetailedStatisticsItem item = new DetailedStatisticsItem();
             item.setName(site.getName());
             item.setUrl(site.getUrl());
-            int pages = pageRepository.findPagesBySiteId(site.getId()).size();
+            //int pages = pageRepository.findPagesBySiteId(site.getId()).size();
+            int pages = pageRepository.getPagesCountBySiteId(site.getId());
             int lemmas = pages * random.nextInt(1_000);
             item.setPages(pages);
             item.setLemmas(lemmas);

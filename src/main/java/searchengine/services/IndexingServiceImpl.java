@@ -2,14 +2,16 @@ package searchengine.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import searchengine.config.ParserSetting;
-import searchengine.dto.ErrorResponse;
+import searchengine.api.response.ErrorResponse;
+import searchengine.dto.ErrorMessages;
 import searchengine.dto.indexing.WebParser;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.config.SitesList;
-import searchengine.dto.DefaultResponse;
+import searchengine.api.response.DefaultResponse;
 import searchengine.model.StatusType;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
@@ -99,14 +101,17 @@ public class IndexingServiceImpl implements IndexingService {
                             this
                     );
                     try {
-                        pool = new ForkJoinPool(4);
+                        pool = new ForkJoinPool(8);
                         pool.invoke(webParser);
                     } catch (NullPointerException ex) {
-                        newSite.setLastError("Ошибка индексации: Сайт недоступен");
+                        newSite.setLastError(ErrorMessages.ioOrNotFound);
                         System.out.println("+++++ " + ex + " ++++++");
                         newSite.setStatus(StatusType.FAILED);
+                    } catch (DataIntegrityViolationException ex) {
+                        newSite.setLastError(ErrorMessages.errorAddEntityToDB + (ex.toString().contains("Duplicate") ?
+                                " (дубликат)" : ""));
                     } catch (Exception ex) {
-                        newSite.setLastError("Ошибка индексации: " + ex);
+                        newSite.setLastError(ErrorMessages.unknownIndexingError + ex);
                         System.out.println("+++++ " + ex + " ++++++");
                         newSite.setStatus(StatusType.FAILED);
                     }
@@ -132,9 +137,9 @@ public class IndexingServiceImpl implements IndexingService {
                     String shortUrl = url
                             .replaceAll("https://", "")
                             .replaceAll("www.", "");
-                    //pageRepository.deleteBySitePath(shortUrl);
                     siteRepository.findAll().forEach(site -> {
                         if (site.getUrl().contains(shortUrl)) {
+                            pageRepository.deleteBySiteId(site.getId());
                             siteRepository.deleteById(site.getId());
                         }
                     });

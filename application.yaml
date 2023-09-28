@@ -17,14 +17,14 @@ spring:
 
 indexing-settings:
   sites:
-    - url: https://www.lenta.ru
-      name: Лента.ру
+    - url: https://volochek.life #https://www.lenta.ru
+      name: Volochek.Life #Лента.ру
     - url: https://www.skillbox.ru
       name: Skillbox
     - url: https://www.playback.ru
       name: PlayBack.Ru
     - url: https://www.dfhdh.ru
-      name: dfhdh.Ru
+      name: Тест несуществующего сайта
 
 parser-setting:
   user-agent: LocoBOT/0.0.2 (indexing and search engine) #"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36";

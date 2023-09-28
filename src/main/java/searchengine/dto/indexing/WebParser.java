@@ -7,6 +7,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.dao.DataIntegrityViolationException;
 import searchengine.config.ParserSetting;
+import searchengine.dto.ErrorMessages;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.model.StatusType;
@@ -55,7 +56,9 @@ public class WebParser extends RecursiveTask<String> {
             stop();
             return "";
         }
-        Set<String> links = getLinks();
+
+        Set<String> links = addCurrentPageAndGetLinks();
+
         if (!indexingServiceImpl.isRunning) {
             stop();
             return "";
@@ -77,16 +80,15 @@ public class WebParser extends RecursiveTask<String> {
             task.fork();
             subTasks.add(task);
         }
-            for (WebParser task : subTasks) {
-                task.join();
+        links.clear();
+        for (WebParser task : subTasks) {
+            task.join();
         }
-            links.clear();
         return "";
     }
 
-    private Set<String> getLinks() {
+    private Set<String> addCurrentPageAndGetLinks() {
         Set<String> links = new HashSet<>();
-        Page emptyPage;
         String url = "";
         Connection.Response response = null;
         int statusCode = 0;
@@ -111,10 +113,11 @@ public class WebParser extends RecursiveTask<String> {
 
             Elements htmlLinks = htmlDoc.select("a[href]");
             for (Element link : htmlLinks) {
-                url = link.attr("abs:href");
-                if (url.contains("?") && url.contains(siteUrl)) {
-                    url = url.substring(0, url.indexOf('?'));
-                }
+                url = link.attr("abs:href").replaceAll("www.","").toLowerCase();
+                //System.out.println(root + " " + url + " " + siteUrl);
+//                if (url.contains("?") && url.contains(siteUrl)) {
+//                    url = url.substring(0, url.indexOf('?'));
+//                }
                 if (url.contains(siteUrl) &&
                         !url.equals(root) &&
                         !url.contains("#") &&
@@ -122,16 +125,16 @@ public class WebParser extends RecursiveTask<String> {
                         !url.contains(".com") &&
                         !url.contains(".pdf") &&
                         !url.contains(".php") &&
+                        !url.contains(".png") &&
+                        !url.contains(".jpg") &&
+                        !url.contains(".jpeg") &&
+                        !url.contains(".gif") &&
+                        !url.contains("upload") &&
                         !url.contains("img") &&
                         !url.contains("image") //&&
                 ) {
                     if (pageRepository.findBySiteIdAndPath(siteId, url.replaceAll(siteUrl,"")) == null) {
-                        emptyPage = new Page();
-                        emptyPage.setCode(0);
-                        emptyPage.setSite(currentSite);
-                        emptyPage.setPath(url.replaceAll(siteUrl,""));
-                        emptyPage.setContent("");
-                        pageRepository.saveAndFlush(emptyPage);
+                        savePage(0, "", url.replaceAll(siteUrl,""), true);
                         links.add(url);
                     }
                 }
@@ -146,38 +149,49 @@ public class WebParser extends RecursiveTask<String> {
                 statusCode = 522;
             if (ex.toString().contains("Read timed out"))
                 statusCode = 598;
-            errorMessage = "Превышен интервал ожидания страницы: " + root;
-            if (root.equals(siteUrl)) {
+            errorMessage =  ErrorMessages.connectTimedOut + root;
+            if (root.equals(siteUrl + "/")) {
                 currentSite.setStatus(StatusType.FAILED);
             }
+            System.out.println(errorMessage);
         } catch (InterruptedException ex) {
-            errorMessage = "Прервано пользователем";
+            errorMessage = ErrorMessages.abortedByUser;
         } catch (IOException ex) {
-            errorMessage = "Ошибка ввода/вывода или сайт недоступен " + root;
+            errorMessage = ErrorMessages.ioOrNotFound + root;
             currentSite.setStatus(StatusType.FAILED);
         } catch (DataIntegrityViolationException ex) {
-            errorMessage = "Ошибка добавления записи в БД" + (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
+            errorMessage = ErrorMessages.errorAddEntityToDB + (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
         }
 
-        String currentPagePath = root.replaceAll(siteUrl,"").isEmpty() ?
-                "/" : root.replaceAll(siteUrl,"");
-        emptyPage = pageRepository.findBySiteIdAndPath(siteId, currentPagePath);
-        emptyPage.setCode(statusCode);
-        emptyPage.setSite(currentSite);
-        emptyPage.setContent(htmlDoc.html());
-        emptyPage.setPath(root.replaceAll(siteUrl,""));
-        pageRepository.saveAndFlush(emptyPage);
+        String currentPagePath = root.equals(siteUrl + "/") ? "/" : root.replaceAll(siteUrl,"");
+        savePage(statusCode, htmlDoc.html(), currentPagePath, false);
 
         if (!errorMessage.equals("")) currentSite.setLastError(errorMessage);
         currentSite.setStatusTime(LocalDateTime.now());
         siteRepository.saveAndFlush(currentSite);
 
         htmlDoc = null;
-        emptyPage = null;
         response = null;
         errorMessage = "";
 
         return links;
+    }
+
+    private void savePage(int statusCode, String content, String pagePath, boolean isNewPage) {
+        Page emptyPage;
+
+        if (isNewPage) {
+            emptyPage = new Page();
+        } else {
+            emptyPage = pageRepository.findBySiteIdAndPath(siteId, pagePath);
+        }
+
+        emptyPage.setCode(statusCode);
+        emptyPage.setSite(currentSite);
+        emptyPage.setContent(content);
+        emptyPage.setPath(pagePath);
+        pageRepository.saveAndFlush(emptyPage);
+        emptyPage = null;
     }
 
     private void stop() {

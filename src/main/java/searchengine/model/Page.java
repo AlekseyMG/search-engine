@@ -21,7 +21,7 @@ public class Page {
     //● content MEDIUMTEXT NOT NULL — контент страницы (HTML-код).
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long id;
+    private int id;
 
     @ManyToOne(fetch = FetchType.EAGER)//(cascade = CascadeType.ALL)
     @JoinColumn(name = "site_id", referencedColumnName = "id")//, insertable = false, updatable = false)

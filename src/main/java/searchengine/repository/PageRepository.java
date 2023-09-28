@@ -17,14 +17,16 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
     public Page findBySiteIdAndPath(int siteId, String path);
     @Query(value = "SELECT * FROM page WHERE site_id=?1", nativeQuery = true)
     public HashSet<Page> findPagesBySiteId(int siteId);
+    @Query(value = "SELECT count(*) FROM page WHERE site_id=?1", nativeQuery = true)
+    public int getPagesCountBySiteId(int siteId);
 
 //    @Query(value = "SELECT * FROM page WHERE path LIKE (%?1%)", nativeQuery = true)
 //    public List<Page> findAllByPath(String path);
 
     @Modifying
     @Transactional
-    @Query(value = "DELETE FROM page WHERE path LIKE (%?1%)", nativeQuery = true)
-    public void deleteBySitePath(String path);
+    @Query(value = "DELETE FROM page WHERE site_id=?1", nativeQuery = true)
+    public void deleteBySiteId(int siteId);
 
     @Modifying
     @Transactional
