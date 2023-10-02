@@ -1,19 +1,21 @@
-package searchengine.dto.indexing;
+package searchengine.services;
 
+import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import searchengine.config.ParserSetting;
 import searchengine.dto.ErrorMessages;
-import searchengine.model.Page;
-import searchengine.model.Site;
-import searchengine.model.StatusType;
+import searchengine.dto.statistics.LemmaCount;
+import searchengine.model.*;
+import searchengine.repository.IndexRepository;
+import searchengine.repository.LemmaRepository;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
-import searchengine.services.IndexingServiceImpl;
 
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -26,6 +28,8 @@ public class WebParser extends RecursiveTask<String> {
     private final Site currentSite;
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
+    private final LemmaRepository lemmaRepository;
+    private final IndexRepository indexRepository;
     private final String siteUrl;
     private final ParserSetting parserSetting;
     private final IndexingServiceImpl indexingServiceImpl;
@@ -36,6 +40,8 @@ public class WebParser extends RecursiveTask<String> {
                      Site currentSite,
                      PageRepository pageRepository,
                      SiteRepository siteRepository,
+                     LemmaRepository lemmaRepository,
+                     IndexRepository indexRepository,
                      String siteUrl,
                      ParserSetting parserSetting,
                      IndexingServiceImpl indexingServiceImpl
@@ -44,6 +50,8 @@ public class WebParser extends RecursiveTask<String> {
         this.currentSite = currentSite;
         this.pageRepository = pageRepository;
         this.siteRepository = siteRepository;
+        this.lemmaRepository = lemmaRepository;
+        this.indexRepository = indexRepository;
         this.siteUrl = siteUrl.replaceAll("www.", "");
         this.parserSetting = parserSetting;
         this.indexingServiceImpl = indexingServiceImpl;
@@ -73,6 +81,8 @@ public class WebParser extends RecursiveTask<String> {
                     currentSite,
                     pageRepository,
                     siteRepository,
+                    lemmaRepository,
+                    indexRepository,
                     siteUrl,
                     parserSetting,
                     indexingServiceImpl
@@ -178,20 +188,51 @@ public class WebParser extends RecursiveTask<String> {
     }
 
     private void savePage(int statusCode, String content, String pagePath, boolean isNewPage) {
-        Page emptyPage;
+        Page currentPage;
 
         if (isNewPage) {
-            emptyPage = new Page();
+            currentPage = new Page();
         } else {
-            emptyPage = pageRepository.findBySiteIdAndPath(siteId, pagePath);
+            currentPage = pageRepository.findBySiteIdAndPath(siteId, pagePath);
+            addLemma(currentPage, content);
         }
 
-        emptyPage.setCode(statusCode);
-        emptyPage.setSite(currentSite);
-        emptyPage.setContent(content);
-        emptyPage.setPath(pagePath);
-        pageRepository.saveAndFlush(emptyPage);
-        emptyPage = null;
+        currentPage.setCode(statusCode);
+        currentPage.setSite(currentSite);
+        currentPage.setContent(content);
+        currentPage.setPath(pagePath);
+        pageRepository.saveAndFlush(currentPage);
+        currentPage = null;
+    }
+
+    private void addLemma(Page page, String content) {
+        try {
+            LemmaFinder lemmaFinder = new LemmaFinder(new RussianLuceneMorphology());
+            lemmaFinder.collectLemmasFromHTML(content).forEach((normalWord, integer) -> {
+                Lemma lemma = lemmaRepository.findBySiteIdAndLemma(currentSite.getId(), normalWord);
+                if (lemma == null) {
+                    lemma = new Lemma();
+                    lemma.setFrequency(0);
+                }
+                Index index = indexRepository.findByPageIdAndLemmaId(page.getId(), lemma.getId());
+                if (index == null) {
+                    index = new Index();
+                }
+                lemma.setLemma(normalWord);
+                lemma.setSite(currentSite);
+                lemma.setFrequency(lemma.getFrequency() + 1);
+
+                index.setPage(page);
+                index.setLemma(lemma);
+                index.setRank(integer);
+                LemmaCount.addLemmaCountForSite(currentSite.getId(), integer);
+                lemmaRepository.saveAndFlush(lemma);
+                indexRepository.saveAndFlush(index);
+            });
+
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
     }
 
     private void stop() {

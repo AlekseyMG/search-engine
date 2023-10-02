@@ -1,6 +1,7 @@
 package searchengine.model;
 
 import jakarta.persistence.*;
+import jakarta.persistence.Index;
 import lombok.Data;
 
 @Data
@@ -8,8 +9,9 @@ import lombok.Data;
 //@Table(indexes = @Index(columnList = "path"))
 @Table(name = "page",
         indexes = {
-        @Index(name = "path_index", columnList = "path, site_id", unique = true)
-})
+            @Index(name = "path_index", columnList = "path, site_id", unique = true)
+        })
+//@Table(name = "page")
 public class Page {
     //id INT NOT NULL AUTO_INCREMENT;
     //● site_id INT NOT NULL — ID веб-сайта из таблицы site;
@@ -30,7 +32,8 @@ public class Page {
 
     @Column(nullable = false)
 //    @Index(name = "idx_page_path", columnNames = "path", length = 255)
-//    @Column(columnDefinition = "TEXT, UNIQUE KEY path_index INDEX (path(255))")
+//    @Column(columnDefinition = "TEXT, UNIQUE KEY path_index INDEX (path(250))")
+//    @Index(name = "page_path", columnList = "path", unique = true)
     private String path;
 
     @Column(nullable = false)

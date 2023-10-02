@@ -7,12 +7,14 @@ import org.springframework.stereotype.Service;
 import searchengine.config.ParserSetting;
 import searchengine.api.response.ErrorResponse;
 import searchengine.dto.ErrorMessages;
-import searchengine.dto.indexing.WebParser;
+import searchengine.dto.statistics.LemmaCount;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.config.SitesList;
 import searchengine.api.response.DefaultResponse;
 import searchengine.model.StatusType;
+import searchengine.repository.IndexRepository;
+import searchengine.repository.LemmaRepository;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 
@@ -44,6 +46,10 @@ public class IndexingServiceImpl implements IndexingService {
     private final PageRepository pageRepository;
     @Autowired
     private final SiteRepository siteRepository;
+    @Autowired
+    private final LemmaRepository lemmaRepository;
+    @Autowired
+    private final IndexRepository indexRepository;
     List<Thread> threads = new ArrayList<>();
     ForkJoinPool pool;
 
@@ -91,11 +97,14 @@ public class IndexingServiceImpl implements IndexingService {
                     page.setPath("/");
                     siteRepository.saveAndFlush(newSite);
                     pageRepository.saveAndFlush(page);
+                    LemmaCount.addSiteId(newSite.getId());
                     WebParser webParser = new WebParser(
                             site.getUrl() + "/",
                             newSite,
                             pageRepository,
                             siteRepository,
+                            lemmaRepository,
+                            indexRepository,
                             site.getUrl(),
                             parserSetting,
                             this
