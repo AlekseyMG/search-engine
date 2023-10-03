@@ -21,6 +21,8 @@ import searchengine.repository.SiteRepository;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
@@ -71,6 +73,50 @@ public class IndexingServiceImpl implements IndexingService {
         clearDataByUrlList();             //ВКЛЮЧИТЬ!!!
         indexingAllSitesFromConfig();     //ВКЛЮЧИТЬ!!!
 
+        return new DefaultResponse();
+//        return new ErrorResponse("ошика 111");
+
+    }
+    @Override
+    public DefaultResponse indexPage(String url) {
+        if (isRunning) {
+            return new ErrorResponse("Индексация уже запущена");
+        }
+//        siteRepository.findAll().stream().forEach(sites -> System.out.println(sites.getUrl()));
+//        siteRepository.findAll().stream().filter(sites ->
+//                        url.contains(sites.getUrl().replaceAll("www.",""))).forEach(System.out::println);
+        List<Site> sites = siteRepository.findAll().stream().filter(site ->
+                url.contains(site.getUrl().replaceAll("www.",""))).toList();
+        if (sites.isEmpty()) {
+            return new ErrorResponse("Данная страница находится за пределами сайтов, " +
+                    "указанных в конфигурационном файле");
+        }
+        Site site = sites.get(0);
+//        System.out.println(sites.get(0).getUrl());
+        AtomicInteger statusCode = new AtomicInteger(0);
+        new  Thread(()-> {
+            WebParser webParser = new WebParser(
+                    url,
+                    site,
+                    pageRepository,
+                    siteRepository,
+                    lemmaRepository,
+                    indexRepository,
+                    site.getUrl(),
+                    parserSetting,
+                    this
+            );
+            webParser.deleteLemma(url);
+            statusCode.set(webParser.updateCurrentPage());
+                        //new ErrorResponse("Страница недоступна");
+
+        }).start();
+        while (statusCode.get() == 0) {}
+
+//        System.out.println(url);
+        if (statusCode.get() != 200) {
+            return new ErrorResponse("Страница недоступна");
+        }
         return new DefaultResponse();
 //        return new ErrorResponse("ошика 111");
 
@@ -139,6 +185,7 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void clearDataByUrlList() {
+        indexRepository.deleteAll();
         sites.getSites()
                 .stream()
                 .map(searchengine.config.Site::getUrl)
@@ -148,6 +195,7 @@ public class IndexingServiceImpl implements IndexingService {
                             .replaceAll("www.", "");
                     siteRepository.findAll().forEach(site -> {
                         if (site.getUrl().contains(shortUrl)) {
+                            lemmaRepository.deleteBySiteId(site.getId());
                             pageRepository.deleteBySiteId(site.getId());
                             siteRepository.deleteById(site.getId());
                         }
@@ -155,6 +203,8 @@ public class IndexingServiceImpl implements IndexingService {
                 });
         pageRepository.resetIdCounter();
         siteRepository.resetIdCounter();
+        indexRepository.resetIdCounter();
+        lemmaRepository.resetIdCounter();
     }
 
 

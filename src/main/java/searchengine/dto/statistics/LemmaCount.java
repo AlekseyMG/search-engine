@@ -12,8 +12,13 @@ public class LemmaCount {
     public static void addSiteId(int siteId) {
         sitesLemmaCounts.put(siteId, new AtomicInteger(0));
     }
-    public static void addLemmaCountForSite(int siteId, int num) {
+    public static void increaseLemmaCountForSite(int siteId, int num) {
         int increased = sitesLemmaCounts.get(siteId).get() + num;
+        sitesLemmaCounts.replace(siteId, new AtomicInteger(increased));
+    }
+
+    public static void decreaseLemmaCountForSite(int siteId, int num) {
+        int increased = sitesLemmaCounts.get(siteId).get() - num;
         sitesLemmaCounts.replace(siteId, new AtomicInteger(increased));
     }
     public static int getLemmaCountBySiteId(int siteId) {

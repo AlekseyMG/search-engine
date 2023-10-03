@@ -6,7 +6,6 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import searchengine.config.ParserSetting;
 import searchengine.dto.ErrorMessages;
@@ -35,6 +34,7 @@ public class WebParser extends RecursiveTask<String> {
     private final IndexingServiceImpl indexingServiceImpl;
     private final int siteId;
     List<WebParser> subTasks = new LinkedList<>();
+    int statusCode = 0;
 
     public WebParser(String url,
                      Site currentSite,
@@ -96,12 +96,18 @@ public class WebParser extends RecursiveTask<String> {
         }
         return "";
     }
-
+    public int updateCurrentPage() {
+        addCurrentPageAndGetLinks();
+//        if (statusCode == 200) {
+//            return true;
+//        }
+        return statusCode;
+    }
     private Set<String> addCurrentPageAndGetLinks() {
         Set<String> links = new HashSet<>();
         String url = "";
         Connection.Response response = null;
-        int statusCode = 0;
+        //int statusCode = 0;
         String errorMessage = "";
         Document htmlDoc = new Document("");
 
@@ -144,7 +150,7 @@ public class WebParser extends RecursiveTask<String> {
                         !url.contains("image") //&&
                 ) {
                     if (pageRepository.findBySiteIdAndPath(siteId, url.replaceAll(siteUrl,"")) == null) {
-                        savePage(0, "", url.replaceAll(siteUrl,""), true);
+                        savePage(0, "", url.replaceAll(siteUrl,""));
                         links.add(url);
                     }
                 }
@@ -174,7 +180,7 @@ public class WebParser extends RecursiveTask<String> {
         }
 
         String currentPagePath = root.equals(siteUrl + "/") ? "/" : root.replaceAll(siteUrl,"");
-        savePage(statusCode, htmlDoc.html(), currentPagePath, false);
+        savePage(statusCode, htmlDoc.html(), currentPagePath);
 
         if (!errorMessage.equals("")) currentSite.setLastError(errorMessage);
         currentSite.setStatusTime(LocalDateTime.now());
@@ -187,22 +193,33 @@ public class WebParser extends RecursiveTask<String> {
         return links;
     }
 
-    private void savePage(int statusCode, String content, String pagePath, boolean isNewPage) {
-        Page currentPage;
+    private void savePage(int statusCode, String content, String pagePath) {
+        Page page = pageRepository.findBySiteIdAndPath(siteId, pagePath);
 
-        if (isNewPage) {
-            currentPage = new Page();
-        } else {
-            currentPage = pageRepository.findBySiteIdAndPath(siteId, pagePath);
-            addLemma(currentPage, content);
+        if (page == null) {
+            page = new Page();
         }
 
-        currentPage.setCode(statusCode);
-        currentPage.setSite(currentSite);
-        currentPage.setContent(content);
-        currentPage.setPath(pagePath);
-        pageRepository.saveAndFlush(currentPage);
-        currentPage = null;
+//        if (isNewPage) {
+//            currentPage = new Page();
+//        } else {
+//            currentPage = pageRepository.findBySiteIdAndPath(siteId, pagePath);
+//            if (statusCode == 200) {
+//                addLemma(currentPage, content);
+//            }
+//        }
+
+        page.setCode(statusCode);
+        page.setSite(currentSite);
+        page.setContent(content);
+        page.setPath(pagePath);
+        pageRepository.saveAndFlush(page);
+
+        if (statusCode == 200) {
+            //deleteLemma(page, content);
+            addLemma(page, content);
+        }
+        page = null;
     }
 
     private void addLemma(Page page, String content) {
@@ -225,7 +242,9 @@ public class WebParser extends RecursiveTask<String> {
                 index.setPage(page);
                 index.setLemma(lemma);
                 index.setRank(integer);
-                LemmaCount.addLemmaCountForSite(currentSite.getId(), integer);
+                LemmaCount.increaseLemmaCountForSite(currentSite.getId(), integer);
+//                lemmaRepository.flush();
+//                indexRepository.flush();
                 lemmaRepository.saveAndFlush(lemma);
                 indexRepository.saveAndFlush(index);
             });
@@ -234,10 +253,34 @@ public class WebParser extends RecursiveTask<String> {
             ex.printStackTrace();
         }
     }
+    public void deleteLemma(String url) {
+        Page page = pageRepository.findBySiteIdAndPath(siteId, url.replaceAll(siteUrl,""));
+        System.out.println("Пытаемся удалить: " + url);
+        System.out.println("Ищем страницу с путем: " + url.replaceAll(siteUrl,""));
+        if (page != null) {
+            System.out.println("Удаляем страницу: " + url);
+            HashSet<Index> indexes = indexRepository.findByPageId(page.getId());
+            indexRepository.deleteByPageId(page.getId());
+            indexes.forEach(index -> {
+                Lemma lemma = index.getLemma();
+                int frequency = lemma.getFrequency() - 1;
+                if (frequency < 1) {
+                    lemmaRepository.delete(lemma);
+                } else {
+                    lemma.setFrequency(frequency);
+                    lemmaRepository.saveAndFlush(lemma);
+                }
+            });
 
+        }
+    }
     private void stop() {
         currentSite.setStatus(StatusType.FAILED);
         currentSite.setLastError("Прервано пользователем");
         siteRepository.saveAndFlush(currentSite);
+//        lemmaRepository.flush();
+//        pageRepository.flush();
+//        indexRepository.flush();
+        savePage(statusCode, "", root.replaceAll(siteUrl,""));
     }
 }
