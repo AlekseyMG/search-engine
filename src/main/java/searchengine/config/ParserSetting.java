@@ -12,4 +12,7 @@ import org.springframework.stereotype.Component;
 public class ParserSetting {
     private String userAgent;
     private String referrer;
+    private int randomDelayDeltaBeforeConnection;
+    private int minDelayBeforeConnection;
+    private int connectionTimeout;
 }

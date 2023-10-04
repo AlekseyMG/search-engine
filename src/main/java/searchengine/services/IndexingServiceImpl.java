@@ -59,8 +59,12 @@ public class IndexingServiceImpl implements IndexingService {
     public DefaultResponse stopIndexing() {
         isRunning = false;
         while (pool.getActiveThreadCount() > 0) {}
-        pool.shutdown();
-        threads.forEach(Thread::interrupt);
+        try {
+            pool.shutdown();
+            threads.forEach(Thread::interrupt);
+        } catch (Exception ex) {
+            System.out.println("Ошибка остановки: " + ex);
+        }
 
         return new DefaultResponse();
     }

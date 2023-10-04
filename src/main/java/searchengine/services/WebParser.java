@@ -75,6 +75,7 @@ public class WebParser extends RecursiveTask<String> {
         if (links.isEmpty()) {
             return "";
         }
+
         for (String link : links) {
             WebParser task = new WebParser(
                     link,
@@ -98,16 +99,12 @@ public class WebParser extends RecursiveTask<String> {
     }
     public int updateCurrentPage() {
         addCurrentPageAndGetLinks();
-//        if (statusCode == 200) {
-//            return true;
-//        }
         return statusCode;
     }
     private Set<String> addCurrentPageAndGetLinks() {
         Set<String> links = new HashSet<>();
         String url = "";
         Connection.Response response = null;
-        //int statusCode = 0;
         String errorMessage = "";
         Document htmlDoc = new Document("");
 
@@ -115,25 +112,28 @@ public class WebParser extends RecursiveTask<String> {
             return new HashSet<>();
         }
         try {
-            Thread.sleep((int) (Math.random() * 5000) + 1000);
+            Thread.sleep((int) (Math.random() *
+                    parserSetting.getRandomDelayDeltaBeforeConnection()) +
+                    parserSetting.getMinDelayBeforeConnection());
+
             System.out.println("Идем по ссылке - " + root);
+
             Connection connection = Jsoup.connect(root);
+
             response = connection
                     .userAgent(parserSetting.getUserAgent())
                     .referrer(parserSetting.getReferrer())
-                    .timeout(3000)
+                    .timeout(parserSetting.getConnectionTimeout())
                     .ignoreHttpErrors(true)
                     .execute();
+
             htmlDoc = connection.get();
             statusCode = response == null ? 0 : response.statusCode();
-
             Elements htmlLinks = htmlDoc.select("a[href]");
+
             for (Element link : htmlLinks) {
                 url = link.attr("abs:href").replaceAll("www.","").toLowerCase();
-                //System.out.println(root + " " + url + " " + siteUrl);
-//                if (url.contains("?") && url.contains(siteUrl)) {
-//                    url = url.substring(0, url.indexOf('?'));
-//                }
+
                 if (url.contains(siteUrl) &&
                         !url.equals(root) &&
                         !url.contains("#") &&
@@ -161,20 +161,31 @@ public class WebParser extends RecursiveTask<String> {
                 errorMessage = response.statusMessage().equals("OK") ? "" : response.statusMessage() + " ";
                 statusCode = response.statusCode();
             }
-            if (ex.toString().contains("Connect timed out"))
+            if (ex.toString().contains("Connect timed out")) {
                 statusCode = 522;
-            if (ex.toString().contains("Read timed out"))
+            }
+            if (ex.toString().contains("Read timed out")) {
                 statusCode = 598;
+            }
+
             errorMessage =  ErrorMessages.connectTimedOut + root;
+
             if (root.equals(siteUrl + "/")) {
                 currentSite.setStatus(StatusType.FAILED);
             }
+
             System.out.println(errorMessage);
+
         } catch (InterruptedException ex) {
             errorMessage = ErrorMessages.abortedByUser;
+
         } catch (IOException ex) {
             errorMessage = ErrorMessages.ioOrNotFound + root;
-            currentSite.setStatus(StatusType.FAILED);
+
+            if (root.equals(siteUrl + "/")) {
+                currentSite.setStatus(StatusType.FAILED);
+            }
+
         } catch (DataIntegrityViolationException ex) {
             errorMessage = ErrorMessages.errorAddEntityToDB + (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
         }
@@ -182,13 +193,16 @@ public class WebParser extends RecursiveTask<String> {
         String currentPagePath = root.equals(siteUrl + "/") ? "/" : root.replaceAll(siteUrl,"");
         savePage(statusCode, htmlDoc.html(), currentPagePath);
 
-        if (!errorMessage.equals("")) currentSite.setLastError(errorMessage);
+        if (!errorMessage.equals("")) {
+            currentSite.setLastError(errorMessage);
+        }
+
         currentSite.setStatusTime(LocalDateTime.now());
         siteRepository.saveAndFlush(currentSite);
 
-        htmlDoc = null;
-        response = null;
-        errorMessage = "";
+//        htmlDoc = null;
+//        response = null;
+//        errorMessage = "";
 
         return links;
     }
@@ -200,15 +214,6 @@ public class WebParser extends RecursiveTask<String> {
             page = new Page();
         }
 
-//        if (isNewPage) {
-//            currentPage = new Page();
-//        } else {
-//            currentPage = pageRepository.findBySiteIdAndPath(siteId, pagePath);
-//            if (statusCode == 200) {
-//                addLemma(currentPage, content);
-//            }
-//        }
-
         page.setCode(statusCode);
         page.setSite(currentSite);
         page.setContent(content);
@@ -216,10 +221,9 @@ public class WebParser extends RecursiveTask<String> {
         pageRepository.saveAndFlush(page);
 
         if (statusCode == 200) {
-            //deleteLemma(page, content);
             addLemma(page, content);
         }
-        page = null;
+//        page = null;
     }
 
     private void addLemma(Page page, String content) {
@@ -227,14 +231,18 @@ public class WebParser extends RecursiveTask<String> {
             LemmaFinder lemmaFinder = new LemmaFinder(new RussianLuceneMorphology());
             lemmaFinder.collectLemmasFromHTML(content).forEach((normalWord, integer) -> {
                 Lemma lemma = lemmaRepository.findBySiteIdAndLemma(currentSite.getId(), normalWord);
+
                 if (lemma == null) {
                     lemma = new Lemma();
                     lemma.setFrequency(0);
                 }
+
                 Index index = indexRepository.findByPageIdAndLemmaId(page.getId(), lemma.getId());
+
                 if (index == null) {
                     index = new Index();
                 }
+
                 lemma.setLemma(normalWord);
                 lemma.setSite(currentSite);
                 lemma.setFrequency(lemma.getFrequency() + 1);
@@ -243,8 +251,7 @@ public class WebParser extends RecursiveTask<String> {
                 index.setLemma(lemma);
                 index.setRank(integer);
                 LemmaCount.increaseLemmaCountForSite(currentSite.getId(), integer);
-//                lemmaRepository.flush();
-//                indexRepository.flush();
+
                 lemmaRepository.saveAndFlush(lemma);
                 indexRepository.saveAndFlush(index);
             });
@@ -255,12 +262,17 @@ public class WebParser extends RecursiveTask<String> {
     }
     public void deleteLemma(String url) {
         Page page = pageRepository.findBySiteIdAndPath(siteId, url.replaceAll(siteUrl,""));
+
         System.out.println("Пытаемся удалить: " + url);
         System.out.println("Ищем страницу с путем: " + url.replaceAll(siteUrl,""));
+
         if (page != null) {
+
             System.out.println("Удаляем страницу: " + url);
+
             HashSet<Index> indexes = indexRepository.findByPageId(page.getId());
             indexRepository.deleteByPageId(page.getId());
+
             indexes.forEach(index -> {
                 Lemma lemma = index.getLemma();
                 int frequency = lemma.getFrequency() - 1;
@@ -278,9 +290,6 @@ public class WebParser extends RecursiveTask<String> {
         currentSite.setStatus(StatusType.FAILED);
         currentSite.setLastError("Прервано пользователем");
         siteRepository.saveAndFlush(currentSite);
-//        lemmaRepository.flush();
-//        pageRepository.flush();
-//        indexRepository.flush();
         savePage(statusCode, "", root.replaceAll(siteUrl,""));
     }
 }
