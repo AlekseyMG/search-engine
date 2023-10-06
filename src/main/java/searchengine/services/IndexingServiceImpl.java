@@ -1,5 +1,6 @@
 package searchengine.services;
 
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -21,10 +22,10 @@ import searchengine.repository.SiteRepository;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
+@Getter
 @RequiredArgsConstructor
 public class IndexingServiceImpl implements IndexingService {
 //брать из конфигурации приложения список сайтов и по каждому сайту:
@@ -40,7 +41,8 @@ public class IndexingServiceImpl implements IndexingService {
 //○ если произошла ошибка и обход завершить не удалось, изменять
 //статус на FAILED и вносить в поле last_error понятную
 //информацию о произошедшей ошибке
-
+    public static final String[] SKIP_LIST = new String[]{"#", "@", ".com", ".pdf", ".php",
+                                ".png", ".jpg", ".jpeg", ".gif", "upload", "img", "image"};
     private final SitesList sites;
     private final ParserSetting parserSetting;
     public volatile boolean isRunning = false;
@@ -82,48 +84,35 @@ public class IndexingServiceImpl implements IndexingService {
 
     }
     @Override
-    public DefaultResponse indexPage(String url) {
+    public DefaultResponse indexPage(String absolutePath) {
         if (isRunning) {
             return new ErrorResponse("Индексация уже запущена");
         }
-//        siteRepository.findAll().stream().forEach(sites -> System.out.println(sites.getUrl()));
-//        siteRepository.findAll().stream().filter(sites ->
-//                        url.contains(sites.getUrl().replaceAll("www.",""))).forEach(System.out::println);
+        if (isMatchedWithSkipList(absolutePath)) {
+            return new ErrorResponse("Адрес содержит недопустимые символы");
+        }
         List<Site> sites = siteRepository.findAll().stream().filter(site ->
-                url.contains(site.getUrl().replaceAll("www.",""))).toList();
+                absolutePath.replaceAll("www.","").contains(
+                        site.getUrl().replaceAll("www.",""))).toList();
+
         if (sites.isEmpty()) {
             return new ErrorResponse("Данная страница находится за пределами сайтов, " +
                     "указанных в конфигурационном файле");
         }
+
         Site site = sites.get(0);
-//        System.out.println(sites.get(0).getUrl());
         AtomicInteger statusCode = new AtomicInteger(0);
         new  Thread(()-> {
-            WebParser webParser = new WebParser(
-                    url,
-                    site,
-                    pageRepository,
-                    siteRepository,
-                    lemmaRepository,
-                    indexRepository,
-                    site.getUrl(),
-                    parserSetting,
-                    this
-            );
-            webParser.deleteLemma(url);
-            statusCode.set(webParser.updateCurrentPage());
-                        //new ErrorResponse("Страница недоступна");
+            WebParser webParser = new WebParser(absolutePath, site,this);
+            webParser.deleteLemma(absolutePath);
+            statusCode.set(webParser.updateOnePage());
+           }).start();
 
-        }).start();
         while (statusCode.get() == 0) {}
-
-//        System.out.println(url);
         if (statusCode.get() != 200) {
             return new ErrorResponse("Страница недоступна");
         }
         return new DefaultResponse();
-//        return new ErrorResponse("ошика 111");
-
     }
 
     private void indexingAllSitesFromConfig() {
@@ -131,12 +120,12 @@ public class IndexingServiceImpl implements IndexingService {
             threads.forEach(Thread::interrupt);
             threads = new ArrayList<>();
         }
-        sites.getSites().forEach(site -> {
+        sites.getSites().forEach(settingSite -> {
             threads.add(
                 new Thread(()-> {
                     Site newSite = new Site();
-                    newSite.setName(site.getName());
-                    newSite.setUrl(site.getUrl());
+                    newSite.setName(settingSite.getName());
+                    newSite.setUrl(settingSite.getUrl());
                     newSite.setStatus(StatusType.INDEXING);
                     newSite.setLastError("");
                     newSite.setStatusTime(LocalDateTime.now());
@@ -149,14 +138,14 @@ public class IndexingServiceImpl implements IndexingService {
                     pageRepository.saveAndFlush(page);
                     LemmaCount.addSiteId(newSite.getId());
                     WebParser webParser = new WebParser(
-                            site.getUrl() + "/",
+                            settingSite.getUrl(),
                             newSite,
-                            pageRepository,
-                            siteRepository,
-                            lemmaRepository,
-                            indexRepository,
-                            site.getUrl(),
-                            parserSetting,
+//                            pageRepository,
+//                            siteRepository,
+//                            lemmaRepository,
+//                            indexRepository,
+//                            settingSite.getUrl(),
+//                            parserSetting,
                             this
                     );
                     try {
@@ -210,6 +199,13 @@ public class IndexingServiceImpl implements IndexingService {
         indexRepository.resetIdCounter();
         lemmaRepository.resetIdCounter();
     }
-
+    public boolean isMatchedWithSkipList(String linkAbsolutePath) {
+        for (String skipString : SKIP_LIST) {
+            if (linkAbsolutePath.contains(skipString)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
 }
