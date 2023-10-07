@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import searchengine.config.ParserSetting;
 import searchengine.api.response.ErrorResponse;
 import searchengine.dto.ErrorMessages;
-import searchengine.dto.statistics.LemmaCount;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.config.SitesList;
@@ -43,9 +42,9 @@ public class IndexingServiceImpl implements IndexingService {
 //информацию о произошедшей ошибке
     public static final String[] SKIP_LIST = new String[]{"#", "@", ".com", ".pdf", ".php",
                                 ".png", ".jpg", ".jpeg", ".gif", "upload", "img", "image"};
-    private final SitesList sites;
+    private final SitesList settingSites;
     private final ParserSetting parserSetting;
-    public volatile boolean isRunning = false;
+    public volatile boolean isStoppedByUser = true;
     @Autowired
     private final PageRepository pageRepository;
     @Autowired
@@ -59,7 +58,7 @@ public class IndexingServiceImpl implements IndexingService {
 
     @Override
     public DefaultResponse stopIndexing() {
-        isRunning = false;
+        isStoppedByUser = true;
         while (pool.getActiveThreadCount() > 0) {}
         try {
             pool.shutdown();
@@ -72,10 +71,17 @@ public class IndexingServiceImpl implements IndexingService {
     }
     @Override
     public DefaultResponse startIndexing() {
-        if (isRunning) {
-            return new ErrorResponse("Индексация уже запущена");
+        //isRunning = false;
+        for (Thread thread : threads) {
+            if (thread.isAlive()) {
+                return new ErrorResponse("Индексация уже запущена");
+            }
         }
-        isRunning = true;
+
+//        if (isRunning) {
+//            return new ErrorResponse("Индексация уже запущена");
+//        }
+        isStoppedByUser = false;
         clearDataByUrlList();             //ВКЛЮЧИТЬ!!!
         indexingAllSitesFromConfig();     //ВКЛЮЧИТЬ!!!
 
@@ -85,9 +91,9 @@ public class IndexingServiceImpl implements IndexingService {
     }
     @Override
     public DefaultResponse indexPage(String absolutePath) {
-        if (isRunning) {
-            return new ErrorResponse("Индексация уже запущена");
-        }
+//        if (isRunning) {
+//            return new ErrorResponse("Индексация уже запущена");
+//        }
         if (isMatchedWithSkipList(absolutePath)) {
             return new ErrorResponse("Адрес содержит недопустимые символы");
         }
@@ -120,34 +126,11 @@ public class IndexingServiceImpl implements IndexingService {
             threads.forEach(Thread::interrupt);
             threads = new ArrayList<>();
         }
-        sites.getSites().forEach(settingSite -> {
+        settingSites.getSites().forEach(settingSite -> {
             threads.add(
                 new Thread(()-> {
-                    Site newSite = new Site();
-                    newSite.setName(settingSite.getName());
-                    newSite.setUrl(settingSite.getUrl());
-                    newSite.setStatus(StatusType.INDEXING);
-                    newSite.setLastError("");
-                    newSite.setStatusTime(LocalDateTime.now());
-                    Page page = new Page();
-                    page.setSite(newSite);
-                    page.setCode(0);
-                    page.setContent("");
-                    page.setPath("/");
-                    siteRepository.saveAndFlush(newSite);
-                    pageRepository.saveAndFlush(page);
-                    LemmaCount.addSiteId(newSite.getId());
-                    WebParser webParser = new WebParser(
-                            settingSite.getUrl(),
-                            newSite,
-//                            pageRepository,
-//                            siteRepository,
-//                            lemmaRepository,
-//                            indexRepository,
-//                            settingSite.getUrl(),
-//                            parserSetting,
-                            this
-                    );
+                    Site newSite = getNewSiteEntity(settingSite);
+                    WebParser webParser = new WebParser(settingSite.getUrl(), newSite, this);
                     try {
                         pool = new ForkJoinPool(8);
                         pool.invoke(webParser);
@@ -164,7 +147,7 @@ public class IndexingServiceImpl implements IndexingService {
                         newSite.setStatus(StatusType.FAILED);
                     }
                     finally {
-                        if (newSite.getStatus().equals(StatusType.INDEXING) && isRunning) {
+                        if (newSite.getStatus().equals(StatusType.INDEXING) && !isStoppedByUser) {
                             newSite.setStatus(StatusType.INDEXED);
                         }
                     }
@@ -173,19 +156,17 @@ public class IndexingServiceImpl implements IndexingService {
                 })
             );
         });
-
         threads.forEach(Thread::start);
     }
 
     private void clearDataByUrlList() {
         indexRepository.deleteAll();
-        sites.getSites()
+        settingSites.getSites()
                 .stream()
                 .map(searchengine.config.Site::getUrl)
                 .forEach(url -> {
-                    String shortUrl = url
-                            .replaceAll("https://", "")
-                            .replaceAll("www.", "");
+                    String shortUrl = url.replaceAll("https://", "")
+                                         .replaceAll("www.", "");
                     siteRepository.findAll().forEach(site -> {
                         if (site.getUrl().contains(shortUrl)) {
                             lemmaRepository.deleteBySiteId(site.getId());
@@ -198,6 +179,23 @@ public class IndexingServiceImpl implements IndexingService {
         siteRepository.resetIdCounter();
         indexRepository.resetIdCounter();
         lemmaRepository.resetIdCounter();
+    }
+
+    private Site getNewSiteEntity(searchengine.config.Site settingSite) {
+        Site newSite = new Site();
+        newSite.setName(settingSite.getName());
+        newSite.setUrl(settingSite.getUrl());
+        newSite.setStatus(StatusType.INDEXING);
+        newSite.setLastError("");
+        newSite.setStatusTime(LocalDateTime.now());
+        Page page = new Page();
+        page.setSite(newSite);
+        page.setCode(0);
+        page.setContent("");
+        page.setPath("/");
+        siteRepository.saveAndFlush(newSite);
+        pageRepository.saveAndFlush(page);
+        return newSite;
     }
     public boolean isMatchedWithSkipList(String linkAbsolutePath) {
         for (String skipString : SKIP_LIST) {

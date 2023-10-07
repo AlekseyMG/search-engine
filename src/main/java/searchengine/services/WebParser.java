@@ -9,7 +9,6 @@ import org.jsoup.select.Elements;
 import org.springframework.dao.DataIntegrityViolationException;
 import searchengine.config.ParserSetting;
 import searchengine.dto.ErrorMessages;
-import searchengine.dto.statistics.LemmaCount;
 import searchengine.model.*;
 import searchengine.model.Index;
 import searchengine.repository.IndexRepository;
@@ -59,7 +58,7 @@ public class WebParser extends RecursiveTask<String> {
 
     @Override
     protected String compute() {
-        if (!indexingServiceImpl.isRunning()) {
+        if (indexingServiceImpl.isStoppedByUser()) {
             stop();
             return "";
         }
@@ -309,8 +308,6 @@ public class WebParser extends RecursiveTask<String> {
 //
                 lemmaRepository.saveAndFlush(lemma);
                 saveIndex(page, lemma, integer);
-                LemmaCount.increase(siteId, integer);
-
             });
 //
 //            EntityManager em = emf.createEntityManager();
@@ -393,7 +390,6 @@ public class WebParser extends RecursiveTask<String> {
                     lemma.setFrequency(frequency);
                     lemmaRepository.saveAndFlush(lemma);
                 }
-                LemmaCount.decrease(siteId, 1);
             });
 
         }

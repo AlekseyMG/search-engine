@@ -1,15 +1,8 @@
 package searchengine.repository;
 
-import com.fasterxml.jackson.databind.util.RawValue;
-import com.mysql.cj.x.protobuf.MysqlxDatatypes;
-import com.mysql.cj.xdevapi.JsonArray;
-import com.mysql.cj.xdevapi.JsonString;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.QueryRewriter;
-import org.springframework.data.repository.query.Param;
-import org.springframework.jdbc.core.SqlParameter;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.Index;
@@ -35,6 +28,10 @@ public interface IndexRepository extends JpaRepository<Index, Integer> {
     @Query(value = "ALTER TABLE `index` AUTO_INCREMENT=1", nativeQuery = true)
     public void resetIdCounter();
 
+    @Query(value = "SELECT SUM(`rank`) " +
+            "FROM `index`, page " +
+            "WHERE index.page_id = page.id and page.site_id=?1", nativeQuery = true)
+    public Float getLemmaCountBySiteId(int siteId);
 //    @Modifying
 //    @Transactional
 //    @Query(value = "INSERT INTO `index` (`lemma_id`, `page_id`, `rank`) VALUES ", nativeQuery = true)
