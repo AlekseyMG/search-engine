@@ -18,6 +18,9 @@ public interface IndexRepository extends JpaRepository<Index, Integer> {
     @Query(value = "SELECT * FROM `index` WHERE page_id=?1", nativeQuery = true)
     public HashSet<Index> findByPageId(int pageId);
 
+    @Query(value = "SELECT page_id FROM `index` WHERE lemma_id=?1", nativeQuery = true)
+    public HashSet<Integer> findPagesIdsByLemmaId(int lemmaId);
+
     @Modifying
     @Transactional
     @Query(value = "DELETE FROM `index`", nativeQuery = true)
@@ -28,7 +31,7 @@ public interface IndexRepository extends JpaRepository<Index, Integer> {
     @Query(value = "ALTER TABLE `index` AUTO_INCREMENT=1", nativeQuery = true)
     public void resetIdCounter();
 
-    @Query(value = "SELECT SUM(`rank`) " +
+    @Query(value = "SELECT SUM(nullif(`rank`, 0)) " +
             "FROM `index`, page " +
             "WHERE index.page_id = page.id and page.site_id=?1", nativeQuery = true)
     public Float getLemmaCountBySiteId(int siteId);

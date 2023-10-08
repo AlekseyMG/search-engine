@@ -12,7 +12,7 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
     hibernate:
-      ddl-auto: create #create-drop, create, update
+      ddl-auto: update #create-drop, create, update
     show-sql: false
 
 indexing-settings:

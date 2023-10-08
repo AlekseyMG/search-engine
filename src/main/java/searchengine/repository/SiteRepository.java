@@ -14,8 +14,9 @@ public interface SiteRepository extends JpaRepository<Site, Integer> {
     @Transactional
     @Query(value = "ALTER TABLE site AUTO_INCREMENT=1", nativeQuery = true)
     public void resetIdCounter();
-//    @Query(value = "SELECT * FROM site WHERE url LIKE '%?1%'", nativeQuery = true)
-//    public Site findByPath(String path);
+    @Query(value = "SELECT * FROM site WHERE url LIKE %?1%", nativeQuery = true)
+    public Site findByUrl(String url);
+
 //    @Query(value = "DELETE FROM site WHERE url LIKE '%?1%'", nativeQuery = true)
 //    public void deleteBySitePath(String path);
 }

@@ -6,10 +6,11 @@ import lombok.Data;
 @Data
 @Entity//(name = "index")
 
-@Table(name = "`index`")//,
-//        indexes = {
-//                @Index(name = "path_index", columnList = "path, site_id", unique = true)
-//        })
+@Table(name = "`index`",
+        indexes = {
+                @jakarta.persistence.Index(name = "page_rank_index", columnList = "page_id, `rank`"),
+                @jakarta.persistence.Index(name = "page_index", columnList = "page_id, lemma_id", unique = true)
+        })
 public class Index {
 //    //● id INT NOT NULL AUTO_INCREMENT;
 //    //● page_id INT NOT NULL — идентификатор страницы;
