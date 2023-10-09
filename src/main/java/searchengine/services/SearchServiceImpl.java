@@ -19,8 +19,6 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class SearchServiceImpl implements SearchService {
-    //private LemmaFinder lemmaFinder;
-    //private TreeSet<SearchItem> searchResult = new TreeSet<>(Comparator.comparingDouble(SearchItem::getRelevance).reversed());
     private ArrayList<SearchItem> searchResult = new ArrayList<>();
     @Autowired
     private final SiteRepository siteRepository;
@@ -30,36 +28,14 @@ public class SearchServiceImpl implements SearchService {
     private final LemmaRepository lemmaRepository;
     @Autowired
     private final IndexRepository indexRepository;
-    private final int maxPagesForLemma = 500;
+    private final int maxPagesForLemma = 1000;
     @Override
     public SearchResponse search(String query, String site, int offset, int limit) {
-        //searchResult = new TreeSet<>(Comparator.comparingDouble(SearchItem::getRelevance).reversed());
         searchResult = new ArrayList<>();
-
         if (site.isEmpty()) {
             return searchInAllSites(query, offset, limit);
         }
         return searchInOneSite(query, site, offset, limit);
-
-//        for (int i = 0; i < 5; i++ ) {
-//            set.add(new SearchItem(
-//                    site,                                               //"site": "http://www.site.com",
-//                    site.replaceAll("https://", ""),                    //"siteName": "Имя сайта",
-//                    "site " + i + " " + " /path/to/page/6784",          //"uri": "/path/to/page/6784",
-//                    "Какая-то страница",                                //"title": "Заголовок страницы, которую выводим"
-//                    "site " + i + "<b>" + query + "</b>",               //"snippet": "Фрагмент текста, в котором найдены совпадения, <b>выделенныежирным</b>, в формате HTML"
-//                    ((3. + i)/10))                                      //"relevance": 0.93362
-//            );
-//        }
-//        set.forEach(searchItem -> System.out.println(
-//                        searchItem.getSite() + " " +
-//                        searchItem.getSiteName() + " " +
-//                        searchItem.getUri() + " " +
-//                        searchItem.getTitle() + " " +
-//                        searchItem.getSnippet() + " " +
-//                        searchItem.getRelevance() + " "
-//        ));
-//        return new SearchResponse(set);
     }
 
     private SearchResponse searchInAllSites(String query, int offset, int limit) {
@@ -71,15 +47,11 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private SearchResponse searchInOneSite(String query, String site, int offset, int limit) {
-        System.out.println( offset + " " + limit);
         Set<String> lemmas = getLemmas(query);
-//        System.out.println(site.replaceAll("https?://","")
-//                .replaceAll("www.",""));
         Site siteEntity = siteRepository
                 .findByUrl(site.replaceAll("https?://","")
                 .replaceAll("www.",""));
         Set<Page> pages = getPagesByLemmasAndSiteId(lemmas, siteEntity.getId());
-        //pages.forEach(page -> System.out.println(page.getPath()));
         pages.forEach(page -> getDataFromPage(page, siteEntity, lemmas));
         searchResult.sort(Comparator.comparingDouble(SearchItem::getRelevance).reversed());
         return new SearchResponse(searchResult.subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(limit)));
@@ -97,32 +69,135 @@ public class SearchServiceImpl implements SearchService {
 
     private Set<Page> getPagesByLemmasAndSiteId(Set<String> lemmas, int siteId) {
         Set<Page> pages = new HashSet<>();
+        TreeSet<Lemma> lemmaEntitys = new TreeSet<>(Comparator.comparingDouble(Lemma::getFrequency));
         lemmas.forEach(lemma -> {
             Lemma lemmaEntity = lemmaRepository.findBySiteIdAndLemma(siteId, lemma);
             if (lemmaEntity != null) {
-                int lemmaId = lemmaRepository.findBySiteIdAndLemma(siteId, lemma).getId();
-                HashSet<Integer> pagesIds = indexRepository.findPagesIdsByLemmaId(lemmaId);
-                System.out.println("lemmaId: " + lemmaId);
-                pagesIds.forEach(System.out::println);
-                if (pagesIds.size() < maxPagesForLemma) {
-                    pages.addAll(pageRepository.findAllById(pagesIds));
-                }
+                lemmaEntitys.add(lemmaEntity);
             }
         });
+        Set<Integer> pagesIds;
+        Set<Page> matchedPages;
+        for (Lemma lemmaEntity : lemmaEntitys) {
+            matchedPages = new HashSet<>();
+            pagesIds = indexRepository.findPagesIdsByLemmaId(lemmaEntity.getId());
 
+            if (pages.isEmpty() && pagesIds.size() < maxPagesForLemma) {
+                    pages.addAll(pageRepository.findAllById(pagesIds));
+            }
+
+            for (int pageId : pagesIds) {
+                if (pages.stream().map(Page::getId).toList().contains(pageId)) {
+                    matchedPages.addAll(pages.stream().filter(page -> page.getId() == pageId).toList());
+                }
+            }
+            pages = matchedPages;
+        }
         return pages;
     }
 
     private void getDataFromPage(Page page, Site site, Set<String> lemmas) {
         String title = Jsoup.parse(page.getContent()).title();
-        searchResult.add(new SearchItem(
+        String pageText = Jsoup.parse(page.getContent()).text();
+        searchResult.add(
+                new SearchItem(
                     site.getUrl(),                                               //"site": "http://www.site.com",
                     site.getName(),                    //"siteName": "Имя сайта",
                     page.getPath(),          //"uri": "/path/to/page/6784",
                     title,                                //"title": "Заголовок страницы, которую выводим"
-                    "... текст сайта <b>" + lemmas.toString() + "</b> текст сайта ...",               //"snippet": "Фрагмент текста, в котором найдены совпадения, <b>выделенныежирным</b>, в формате HTML"
-                (Math.random() * 100))                                      //"relevance": 0.93362
+                    getSnippet(pageText, lemmas),               //"snippet": "Фрагмент текста, в котором найдены совпадения, <b>выделенныежирным</b>, в формате HTML"
+                    getRelevance()
+                )                                      //"relevance": 0.93362
             );
+    }
+
+    private String getSnippet(String pageText, Set<String> lemmas) {
+
+        for (String lemma : lemmas) {
+            pageText = getTextWithBoldedWords(lemma, pageText);
+        }
+        return getSnippetFromBoldedText(pageText);
+    }
+    private String getTextWithBoldedWords(String lemma, String text) {
+        char bigFirstChar = lemma.toUpperCase().charAt(0);
+        char lowFirstChar = lemma.toLowerCase().charAt(0);
+
+        if (lemma.charAt(lemma.length() - 1) == 'ь') {
+            lemma = lemma.substring(0, lemma.length() - 1);
+        }
+        if (lemma.length() > 4) {
+            lemma = lemma.substring(0, lemma.length() - 1);
+        }
+        if (lemma.length() > 3) {
+            lemma = lemma.substring(0, lemma.length() - 1);
+        }
+
+        String bigFirstCharLemma = bigFirstChar + lemma.substring(1);
+        String lowFirstCharLemma = lowFirstChar + lemma.substring(1);
+        String lowFirstCharLemmaWithYo = lowFirstCharLemma.replace("е", "ё");
+        String bigFirstCharLemmaWithYo = bigFirstCharLemma.replace("е", "ё");
+        String upperCaseLemmaWithYo = lowFirstCharLemmaWithYo.toUpperCase().replaceAll("Е", "Ё");
+
+        String PunctuationRegex = "[\\.\\!\\:\\;\\?\\'\\,\\(\\)\\+\\*\\«\\»\"\\[\\]\\{\\}\\“]";
+        String splitterRegex = "-|\\s+" + PunctuationRegex + "?";
+        String[] splittedText = text.split(splitterRegex);
+        StringBuilder textWithBoldedWords = new StringBuilder();
+        String wordWithoutPunctuation;
+        String punctuation;
+        for (String word : splittedText) {
+            word = word.replace("\\","");
+            wordWithoutPunctuation = word.replaceAll(PunctuationRegex, "");
+            punctuation = word.replaceAll(wordWithoutPunctuation, "");
+            char firstWordChar = 0;
+            if (!word.isBlank()) {
+                firstWordChar = word.toLowerCase().charAt(0);
+            }
+            boolean isFirstCharMatched = firstWordChar == lowFirstChar;
+            boolean lengthMatched = wordWithoutPunctuation.length() <= lemma.length() + 4;
+            boolean lemmaMatched = wordWithoutPunctuation.contains(lowFirstCharLemma) ||
+                    wordWithoutPunctuation.contains(bigFirstCharLemma) ||
+                    wordWithoutPunctuation.contains(lemma.toUpperCase()) ||
+                    wordWithoutPunctuation.contains(lowFirstCharLemmaWithYo) ||
+                    wordWithoutPunctuation.contains(bigFirstCharLemmaWithYo) ||
+                    wordWithoutPunctuation.toUpperCase().contains(upperCaseLemmaWithYo);
+
+            if (lemmaMatched && lengthMatched && isFirstCharMatched) {
+                word = "<b>" + wordWithoutPunctuation + "</b>" + punctuation;
+            }
+            textWithBoldedWords.append(" ").append(word);
+        }
+        return textWithBoldedWords.toString();
+    }
+
+    private String getSnippetFromBoldedText(String pageText) {
+        StringBuilder snippet;
+        String firstWords;
+        List<StringBuilder> snippets = new ArrayList<>();
+        int charsContAroundWord = 140;
+        int exponent = 30;
+        while (pageText.contains("<b>")) {
+            snippet = new StringBuilder();
+            firstWords = pageText.substring(Math.max(pageText.indexOf("<b>") - 140, 0), pageText.indexOf("<b>"));
+            pageText = pageText.substring(pageText.indexOf("<b>"));
+            int endIndex = Math.min(pageText.indexOf("</b>") + 140, pageText.length());
+            snippet.append(firstWords).append(pageText, 0, endIndex);
+            snippets.add(snippet);
+            pageText = pageText.substring(pageText.indexOf("</b>") + 4);
+            if (charsContAroundWord > 8 && exponent > 0) {
+                exponent -= 4;
+                charsContAroundWord = charsContAroundWord - exponent - 6;
+            }
+        }
+        StringBuilder finalSnippet = new StringBuilder();
+        for (StringBuilder snip : snippets) {
+            int startIndex = Math.max(snip.toString().indexOf("<b>") - charsContAroundWord, 0);
+            int endIndex = Math.min(snip.toString().indexOf("</b>") + charsContAroundWord + 4, snip.toString().length());
+            finalSnippet.append("...").append(snip,startIndex, endIndex).append("</b>").append("...").append(" ");
+        }
+        return finalSnippet.substring(0, Math.min(finalSnippet.length(), 400));
+    }
+    private double getRelevance() {
+        return Math.random() * 100;
     }
 
     private int getMinLimit(int limit) {

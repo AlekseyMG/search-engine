@@ -71,29 +71,24 @@ public class IndexingServiceImpl implements IndexingService {
     }
     @Override
     public DefaultResponse startIndexing() {
-        //isRunning = false;
+//------------------------------------------------------------------// Отключена кнопка Start Indexing,
+        if (isStoppedByUser) {                                      // чтобы всякие хулиганы не запускали
+            return new ErrorResponse("Не трогай эту кнопку!"); //  долгую полную индексацию.
+        }                                                           // Закоментируйте этот код, чтобы включить
+//------------------------------------------------------------------// кнопку обратно и запустить индексацию.
         for (Thread thread : threads) {
             if (thread.isAlive()) {
                 return new ErrorResponse("Индексация уже запущена");
             }
         }
-
-//        if (isRunning) {
-//            return new ErrorResponse("Индексация уже запущена");
-//        }
         isStoppedByUser = false;
         clearDataByUrlList();             //ВКЛЮЧИТЬ!!!
         indexingAllSitesFromConfig();     //ВКЛЮЧИТЬ!!!
 
         return new DefaultResponse();
-//        return new ErrorResponse("ошика 111");
-
     }
     @Override
     public DefaultResponse indexPage(String absolutePath) {
-//        if (isRunning) {
-//            return new ErrorResponse("Индексация уже запущена");
-//        }
         if (isMatchedWithSkipList(absolutePath)) {
             return new ErrorResponse("Адрес содержит недопустимые символы");
         }
