@@ -32,6 +32,7 @@ public class SearchServiceImpl implements SearchService {
     @Override
     public SearchResponse search(String query, String site, int offset, int limit) {
         searchResult = new ArrayList<>();
+
         if (site.isEmpty()) {
             return searchInAllSites(query, offset, limit);
         }
@@ -42,22 +43,25 @@ public class SearchServiceImpl implements SearchService {
         siteRepository.findAll().forEach(site -> {
             searchInOneSite(query, site.getUrl(), offset, limit);
         });
-        //searchInOneSite(query, site, offset, limit);
         return new SearchResponse(searchResult.subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(limit)));
     }
 
     private SearchResponse searchInOneSite(String query, String site, int offset, int limit) {
-        Set<String> lemmas = getLemmas(query);
-        lemmas = getLemmaWithDublicateCheck(lemmas, query);
+        Set<String> lemmas = new HashSet<>();
+        if (!query.isBlank()) {
+            lemmas = getLemmas(query);
+        }
+        lemmas = getLemmaCheckedForDuplicate(lemmas, query);
         Site siteEntity = siteRepository
                 .findByUrl(site.replaceAll("https?://","")
                 .replaceAll("www.",""));
         Set<Page> pages = getPagesByLemmasAndSiteId(lemmas, siteEntity.getId());
+
         for (Page page : pages) {
             getDataFromPage(page, siteEntity, lemmas);
         }
-        //pages.forEach(page -> getDataFromPage(page, siteEntity, lemmas));
         searchResult.sort(Comparator.comparingDouble(SearchItem::getRelevance).reversed());
+
         return new SearchResponse(searchResult.subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(limit)));
     }
 
@@ -72,8 +76,9 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private Set<Page> getPagesByLemmasAndSiteId(Set<String> lemmas, int siteId) {
-        Set<Page> pagesByLemmaFromIndex = new HashSet<>();
         TreeSet<Lemma> lemmaEntitys = new TreeSet<>(Comparator.comparingDouble(Lemma::getFrequency));
+        Set<Integer> firstPagesIdsByLemmaFromIndex = new HashSet<>();
+
         lemmas.forEach(lemma -> {
             Lemma lemmaEntity = lemmaRepository.findBySiteIdAndLemma(siteId, lemma);
             if (lemmaEntity == null) {
@@ -81,71 +86,52 @@ public class SearchServiceImpl implements SearchService {
             }
             lemmaEntitys.add(lemmaEntity);
         });
-//        System.out.println("site " + siteId + " lemmaEntitys");
-//        lemmaEntitys.stream().map(Lemma::getLemma).forEach(System.out::println);
-//        System.out.println("site " + siteId + " lemmaEntitys");
-
-        Set<Integer> firstPagesIdsByLemmaFromIndex = indexRepository.findPagesIdsByLemmaId(lemmaEntitys.first().getId());
-
+        if (!lemmaEntitys.isEmpty()) {
+            firstPagesIdsByLemmaFromIndex = indexRepository.findPagesIdsByLemmaId(lemmaEntitys.first().getId());
+        }
         if (lemmas.size() == 1) {
             return firstPagesIdsByLemmaFromIndex.size() <= maxPagesForLemma ?
                     Set.copyOf(pageRepository.findAllById(firstPagesIdsByLemmaFromIndex)) :
                     new HashSet<>();
         }
+        return getMatchedPages(lemmaEntitys, firstPagesIdsByLemmaFromIndex);
+    }
 
+    private Set<Page> getMatchedPages(TreeSet<Lemma> lemmaEntitys, Set<Integer> firstPagesIdsByLemmaFromIndex) {
         Set<Page> matchedPages = new HashSet<>();
-
-//        System.out.println("site " + siteId + " lemmaEntitys-------------------------");
-//        lemmaEntitys.stream().map(Lemma::getLemma).forEach(System.out::println);
-//        lemmaEntitys.stream().map(Lemma::getFrequency).forEach(System.out::println);
-//        System.out.println("site " + siteId + " lemmaEntitys-------------------------\n");
-
+        Set<Page> pagesByLemmaFromIndex = new HashSet<>();
         Set<Integer> nextPagesIdsByLemmaFromIndex = new HashSet<>();
+
         for (Lemma lemmaEntity : lemmaEntitys) {
-            //matchedPages = new HashSet<>();
-            //firstPagesIdsByLemmaFromIndex = indexRepository.findPagesIdsByLemmaId(lemmaEntity.getId());
+
             if (!lemmaEntity.equals(lemmaEntitys.first())) {
                 nextPagesIdsByLemmaFromIndex = indexRepository.findPagesIdsByLemmaId(lemmaEntity.getId());
             }
             if (firstPagesIdsByLemmaFromIndex.size() < maxPagesForLemma) {
                 pagesByLemmaFromIndex.addAll(pageRepository.findAllById(firstPagesIdsByLemmaFromIndex));
             }
-//            System.out.println("site " + siteId + " lemma-------------data-----------");
-//            System.out.println("site " + siteId + " lemmaEntity " + lemmaEntity.getLemma());
-//            System.out.println("site " + siteId + " Frequency " + lemmaEntity.getFrequency());
-//            System.out.println("site " + siteId + " firstPagesIdsByLemmaFromIndex " + firstPagesIdsByLemmaFromIndex + " length :" + firstPagesIdsByLemmaFromIndex.size());
-//            System.out.println("site " + siteId + " nextPagesIdsByLemmaFromIndex " + nextPagesIdsByLemmaFromIndex);
-//            System.out.println("site " + siteId + " lemma-------------data-----------\n");
+
             for (int pageIdByLemmaFromIndex : firstPagesIdsByLemmaFromIndex) {
 
                 if (nextPagesIdsByLemmaFromIndex.stream().anyMatch(pageId -> pageId == pageIdByLemmaFromIndex)) {
-                    matchedPages.addAll(pagesByLemmaFromIndex.stream().filter(page -> page.getId() == pageIdByLemmaFromIndex).toList());
+                    matchedPages.addAll(pagesByLemmaFromIndex.stream()
+                            .filter(page -> page.getId() == pageIdByLemmaFromIndex).toList());
                     firstPagesIdsByLemmaFromIndex = Set.copyOf(matchedPages.stream().map(Page::getId).toList());
                 }
-
             }
-            System.out.println("site " + siteId + " matchedPagesIds-----------");
-            matchedPages.stream().map(Page::getId).forEach(id -> System.out.print(id + ", "));
-            System.out.println("\nsite " + siteId + " matchedPagesIds-----------\n");
-//            nextPagesIdsByLemmaFromIndex = indexRepository.findPagesIdsByLemmaId(lemmaEntity.getId());
-            //pagesByLemmaFromIndex = matchedPages;
         }
         return matchedPages;
     }
 
-    private Set<String> getLemmaWithDublicateCheck(Set<String> lemmas, String query) {
+    private Set<String> getLemmaCheckedForDuplicate(Set<String> lemmas, String query) {
         String[] queryWords = query.split("(?<=-|\\s)");
-        Set<String> tempLemas = Set.copyOf(lemmas);
+        List<String> tempLemmas = lemmas.stream().sorted(Comparator.comparingInt(String::length)).toList();
         Set<String> checkedLemmas = new HashSet<>();
         for (String queryWord : queryWords) {
-//            System.out.println("queryWord " + queryWord);
-//            System.out.println("tempLemas " + tempLemas);
             int lemmaCount = 0;
             boolean finded = false;
             while (true) {
-                for (String lemma : tempLemas) {
-//                    System.out.println("queryWord.substring " + queryWord.substring(0, queryWord.length() - lemmaCount));
-//                    System.out.println("lemma " + lemma);
+                for (String lemma : tempLemmas) {
                     if (lemma.contains(queryWord.substring(0, queryWord.length() - lemmaCount))) {
                         checkedLemmas.add(lemma);
                         finded = true;
@@ -158,7 +144,7 @@ public class SearchServiceImpl implements SearchService {
                 }
             }
         }
-        System.out.println("checkedLemmas " + checkedLemmas);
+        //System.out.println("checkedLemmas " + checkedLemmas);
         return checkedLemmas;
     }
 
@@ -202,12 +188,8 @@ public class SearchServiceImpl implements SearchService {
 
         String bigFirstCharLemma = bigFirstChar + lemma.substring(1);
         String lowFirstCharLemma = lowFirstChar + lemma.substring(1);
-//        String lowFirstCharLemmaWithYo = lowFirstCharLemma.replace("е", "ё");
-//        String bigFirstCharLemmaWithYo = bigFirstCharLemma.replace("е", "ё");
-//        String upperCaseLemmaWithYo = lowFirstCharLemmaWithYo.toUpperCase().replaceAll("Е", "Ё");
 
         String PunctuationRegex = "[\\.\\!\\:\\;\\?\\'\\,\\(\\)\\+\\*\\«\\»\"\\[\\]\\{\\}\\„\\“]";
-        //String splitterRegex = "-|\\s+" + PunctuationRegex + "?";
         String splitterRegex = "(?<=-|\\s|\\.|\\!|\\:|\\;|\\?|\\'|\\,|\\(|\\)|\\+|\\*|\\«|\\»|\"|\\[|\\]|\\{|\\}|\\„|\\“)";
         String[] splittedText = text.split(splitterRegex);
         StringBuilder textWithBoldedWords = new StringBuilder();
@@ -225,11 +207,7 @@ public class SearchServiceImpl implements SearchService {
             boolean lengthMatched = wordWithoutPunctuation.length() <= lemma.length() + 4;
             boolean lemmaMatched = wordWithoutPunctuation.contains(lowFirstCharLemma) ||
                     wordWithoutPunctuation.contains(bigFirstCharLemma) ||
-                    wordWithoutPunctuation.contains(lemma.toUpperCase()) //||
-//                    wordWithoutPunctuation.contains(lowFirstCharLemmaWithYo) ||
-//                    wordWithoutPunctuation.contains(bigFirstCharLemmaWithYo) ||
-//                    wordWithoutPunctuation.toUpperCase().contains(upperCaseLemmaWithYo)
-                    ;
+                    wordWithoutPunctuation.contains(lemma.toUpperCase());
 
             if (lemmaMatched && lengthMatched && isFirstCharMatched) {
                 word = "<b>" + wordWithoutPunctuation + "</b>" + punctuation;
@@ -264,7 +242,8 @@ public class SearchServiceImpl implements SearchService {
             int endIndex = Math.min(snip.toString().indexOf("</b>") + charsContAroundWord + 4, snip.toString().length());
             finalSnippet.append("...").append(snip,startIndex, endIndex).append("</b>").append("...").append(" ");
         }
-        return finalSnippet.substring(0, Math.min(finalSnippet.length(), 400)).replaceAll("-</b>\\s+<b>", "-");
+        return finalSnippet.substring(0, Math.min(finalSnippet.length(), 400))
+                .replaceAll("-</b>\\s+<b>", "-").replaceAll("<.?h.>","");
     }
     private double getRelevance() {
         return Math.random() * 100;
