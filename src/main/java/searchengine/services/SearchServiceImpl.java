@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import searchengine.api.response.SearchResponse;
 import searchengine.dto.SearchItem;
+import searchengine.model.Index;
 import searchengine.model.Lemma;
 import searchengine.model.Page;
 import searchengine.model.Site;
@@ -29,28 +30,38 @@ public class SearchServiceImpl implements SearchService {
     @Autowired
     private final IndexRepository indexRepository;
     private final int maxPagesForLemma = 1000;
+    private boolean isLastSite = false;
     @Override
     public SearchResponse search(String query, String site, int offset, int limit) {
         searchResult = new ArrayList<>();
 
         if (site.isEmpty()) {
-            return searchInAllSites(query, offset, limit);
+            isLastSite = false;
+            return searchInAllSites(query, offset, limit, isLastSite);
         }
-        return searchInOneSite(query, site, offset, limit);
+        isLastSite = true;
+        return searchInOneSite(query, site, offset, limit, isLastSite);
     }
 
-    private SearchResponse searchInAllSites(String query, int offset, int limit) {
-        siteRepository.findAll().forEach(site -> {
-            searchInOneSite(query, site.getUrl(), offset, limit);
-        });
-        return new SearchResponse(searchResult.subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(limit)));
+    private SearchResponse searchInAllSites(String query, int offset, int limit, boolean isLastSite) {
+        List<Site> siteList = siteRepository.findAll();
+        for (Site site : siteList) {
+            if (site.equals(siteList.get(siteList.size() - 1))){
+                isLastSite = true;
+            }
+            searchInOneSite(query, site.getUrl(), offset, limit, isLastSite);
+        }
+        return new SearchResponse(searchResult
+                .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(limit)));
     }
 
-    private SearchResponse searchInOneSite(String query, String site, int offset, int limit) {
+    private SearchResponse searchInOneSite(String query, String site, int offset, int limit, boolean isLastSite) {
         Set<String> lemmas = new HashSet<>();
+
         if (!query.isBlank()) {
             lemmas = getLemmas(query);
         }
+
         lemmas = getLemmaCheckedForDuplicate(lemmas, query);
         Site siteEntity = siteRepository
                 .findByUrl(site.replaceAll("https?://","")
@@ -60,9 +71,13 @@ public class SearchServiceImpl implements SearchService {
         for (Page page : pages) {
             getDataFromPage(page, siteEntity, lemmas);
         }
+        if (isLastSite) {
+            setRelativeRelevance();
+        }
         searchResult.sort(Comparator.comparingDouble(SearchItem::getRelevance).reversed());
 
-        return new SearchResponse(searchResult.subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(limit)));
+        return new SearchResponse(searchResult
+                .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(limit)));
     }
 
     private Set<String> getLemmas(String text) {
@@ -76,25 +91,30 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private Set<Page> getPagesByLemmasAndSiteId(Set<String> lemmas, int siteId) {
-        TreeSet<Lemma> lemmaEntitys = new TreeSet<>(Comparator.comparingDouble(Lemma::getFrequency));
+        TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(lemmas, siteId);
         Set<Integer> firstPagesIdsByLemmaFromIndex = new HashSet<>();
 
-        lemmas.forEach(lemma -> {
-            Lemma lemmaEntity = lemmaRepository.findBySiteIdAndLemma(siteId, lemma);
-            if (lemmaEntity == null) {
-                lemmaEntity = new Lemma();
-            }
-            lemmaEntitys.add(lemmaEntity);
-        });
-        if (!lemmaEntitys.isEmpty()) {
-            firstPagesIdsByLemmaFromIndex = indexRepository.findPagesIdsByLemmaId(lemmaEntitys.first().getId());
+        if (!lemmaEntities.isEmpty()) {
+            firstPagesIdsByLemmaFromIndex = indexRepository.findPagesIdsByLemmaId(lemmaEntities.first().getId());
         }
         if (lemmas.size() == 1) {
             return firstPagesIdsByLemmaFromIndex.size() <= maxPagesForLemma ?
                     Set.copyOf(pageRepository.findAllById(firstPagesIdsByLemmaFromIndex)) :
                     new HashSet<>();
         }
-        return getMatchedPages(lemmaEntitys, firstPagesIdsByLemmaFromIndex);
+        return getMatchedPages(lemmaEntities, firstPagesIdsByLemmaFromIndex);
+    }
+    private TreeSet<Lemma> getLemmaEntitiesByWordsAndSiteId(Set<String> lemmas, int siteId) {
+        TreeSet<Lemma> lemmaEntities = new TreeSet<>(Comparator.comparingDouble(Lemma::getFrequency));
+
+        lemmas.forEach(lemma -> {
+            Lemma lemmaEntity = lemmaRepository.findBySiteIdAndLemma(siteId, lemma);
+            if (lemmaEntity == null) {
+                lemmaEntity = new Lemma();
+            }
+            lemmaEntities.add(lemmaEntity);
+        });
+        return lemmaEntities;
     }
 
     private Set<Page> getMatchedPages(TreeSet<Lemma> lemmaEntitys, Set<Integer> firstPagesIdsByLemmaFromIndex) {
@@ -144,7 +164,6 @@ public class SearchServiceImpl implements SearchService {
                 }
             }
         }
-        //System.out.println("checkedLemmas " + checkedLemmas);
         return checkedLemmas;
     }
 
@@ -153,28 +172,37 @@ public class SearchServiceImpl implements SearchService {
         String pageText = Jsoup.parse(page.getContent()).text();
         searchResult.add(
                 new SearchItem(
-                    site.getUrl(),                                               //"site": "http://www.site.com",
-                    site.getName(),                    //"siteName": "Имя сайта",
-                    page.getPath(),          //"uri": "/path/to/page/6784",
-                    title,                                //"title": "Заголовок страницы, которую выводим"
-                    getSnippet(pageText, lemmas),               //"snippet": "Фрагмент текста, в котором найдены совпадения, <b>выделенныежирным</b>, в формате HTML"
-                    getRelevance()
-                )                                      //"relevance": 0.93362
-            );
+                        site.getUrl(),
+                        site.getName(),
+                        page.getPath(),
+                        title,
+                        getSnippet(pageText, lemmas),
+                        getAbsoluteRelevance(page, lemmas)
+                )
+        );
+    }
+    private void setRelativeRelevance() {
+        double maxAbsoluteRelevance = searchResult.stream()
+                .map(SearchItem::getRelevance)
+                .max(Comparator.comparingDouble(Double::doubleValue))
+                .get();
+
+        searchResult.forEach(searchItem -> searchItem
+                .setRelevance(searchItem.getRelevance() / maxAbsoluteRelevance));
     }
 
     private String getSnippet(String pageText, Set<String> lemmas) {
-
         for (String lemma : lemmas) {
             pageText = getTextWithBoldedWords(lemma, pageText);
         }
         return getSnippetFromBoldedText(pageText);
     }
     private String getTextWithBoldedWords(String lemma, String text) {
-        text = text.replaceAll("Ё", "Е").replaceAll("ё", "е");
-        lemma = lemma.replaceAll("Ё", "Е").replaceAll("ё", "е");
         char bigFirstChar = lemma.toUpperCase().charAt(0);
         char lowFirstChar = lemma.toLowerCase().charAt(0);
+
+        text = text.replaceAll("Ё", "Е").replaceAll("ё", "е");
+        lemma = lemma.replaceAll("Ё", "Е").replaceAll("ё", "е");
 
         if (lemma.charAt(lemma.length() - 1) == 'ь') {
             lemma = lemma.substring(0, lemma.length() - 1);
@@ -189,8 +217,10 @@ public class SearchServiceImpl implements SearchService {
         String bigFirstCharLemma = bigFirstChar + lemma.substring(1);
         String lowFirstCharLemma = lowFirstChar + lemma.substring(1);
 
-        String PunctuationRegex = "[\\.\\!\\:\\;\\?\\'\\,\\(\\)\\+\\*\\«\\»\"\\[\\]\\{\\}\\„\\“]";
-        String splitterRegex = "(?<=-|\\s|\\.|\\!|\\:|\\;|\\?|\\'|\\,|\\(|\\)|\\+|\\*|\\«|\\»|\"|\\[|\\]|\\{|\\}|\\„|\\“)";
+        String PunctuationRegex = "[\\.\\!\\:\\;\\?\\'" +
+                "\\,\\(\\)\\+\\*\\«\\»\"\\[\\]\\{\\}\\„\\“]";
+        String splitterRegex = "(?<=-|\\s|\\.|\\!|\\:|\\;|\\?|\\'|\\," +
+                "|\\(|\\)|\\+|\\*|\\«|\\»|\"|\\[|\\]|\\{|\\}|\\„|\\“)";
         String[] splittedText = text.split(splitterRegex);
         StringBuilder textWithBoldedWords = new StringBuilder();
         String wordWithoutPunctuation;
@@ -225,12 +255,18 @@ public class SearchServiceImpl implements SearchService {
         int exponent = 20;
         while (pageText.contains("<b>")) {
             snippet = new StringBuilder();
-            firstWords = pageText.substring(Math.max(pageText.indexOf("<b>") - 140, 0), pageText.indexOf("<b>"));
+
+            int startIndex = Math.max(pageText.indexOf("<b>") - 140, 0);
+            firstWords = pageText.substring(startIndex, pageText.indexOf("<b>"));
+
             pageText = pageText.substring(pageText.indexOf("<b>"));
+
             int endIndex = Math.min(pageText.indexOf("</b>") + 140, pageText.length());
             snippet.append(firstWords).append(pageText, 0, endIndex);
             snippets.add(snippet);
+
             pageText = pageText.substring(pageText.indexOf("</b>") + 4);
+
             if (charsContAroundWord > 8 && exponent > 0) {
                 exponent -= 4;
                 charsContAroundWord = charsContAroundWord - exponent - 6;
@@ -238,15 +274,39 @@ public class SearchServiceImpl implements SearchService {
         }
         StringBuilder finalSnippet = new StringBuilder();
         for (StringBuilder snip : snippets) {
-            int startIndex = Math.max(snip.toString().indexOf("<b>") - charsContAroundWord, 0);
-            int endIndex = Math.min(snip.toString().indexOf("</b>") + charsContAroundWord + 4, snip.toString().length());
-            finalSnippet.append("...").append(snip,startIndex, endIndex).append("</b>").append("...").append(" ");
+            int startIndex = Math.max(snip.toString().indexOf("<b>") -
+                    charsContAroundWord, 0);
+            int endIndex = Math.min(snip.toString().indexOf("</b>") +
+                    charsContAroundWord + 4, snip.toString().length());
+
+            finalSnippet
+                    .append("...")
+                    .append(snip,startIndex, endIndex)
+                    .append("</b>")
+                    .append("...")
+                    .append(" ");
         }
         return finalSnippet.substring(0, Math.min(finalSnippet.length(), 400))
-                .replaceAll("-</b>\\s+<b>", "-").replaceAll("<.?h.>","");
+                .replaceAll("-</b>\\s+<b>", "-")
+                .replaceAll("<.?h.>","");
     }
-    private double getRelevance() {
-        return Math.random() * 100;
+    private double getAbsoluteRelevance(Page page, Set<String> lemmas) {
+        TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(lemmas, page.getSite().getId());
+        Set<Index> indices = new HashSet<>();
+        lemmaEntities.forEach(lemma -> indices.add(indexRepository
+                .findByPageIdAndLemmaId(page.getId(), lemma.getId())));
+
+        List<Double> Ranks = new ArrayList<>(indices.stream()
+                .filter(Objects::nonNull)
+                .map(Index::getRank)
+                .map(Float::doubleValue)
+                .toList());
+        double maxRank = Ranks.stream().max(Comparator.comparingDouble(Double::doubleValue)).get();
+        double sumRanks = 0;
+        for (Double rank : Ranks) {
+            sumRanks += rank;
+        }
+        return sumRanks / maxRank;
     }
 
     private int getMinLimit(int limit) {
