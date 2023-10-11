@@ -40,6 +40,7 @@ public class IndexingServiceImpl implements IndexingService {
     private final LemmaRepository lemmaRepository;
     @Autowired
     private final IndexRepository indexRepository;
+    private final BatchIndexWriter batchIndexWriter;
     List<Thread> threads = new ArrayList<>();
     ForkJoinPool pool;
 
@@ -53,6 +54,7 @@ public class IndexingServiceImpl implements IndexingService {
         } catch (Exception ex) {
             System.out.println("Ошибка остановки: " + ex);
         }
+        batchIndexWriter.close();
 
         return new DefaultResponse();
     }
@@ -140,6 +142,7 @@ public class IndexingServiceImpl implements IndexingService {
                     }
                     newSite.setStatusTime(LocalDateTime.now());
                     siteRepository.saveAndFlush(newSite);
+                    batchIndexWriter.close();
                 })
             );
         });

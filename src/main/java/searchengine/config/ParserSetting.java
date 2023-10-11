@@ -2,6 +2,7 @@ package searchengine.config;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -15,4 +16,6 @@ public class ParserSetting {
     private int randomDelayDeltaBeforeConnection;
     private int minDelayBeforeConnection;
     private int connectionTimeout;
+    @Value("${spring.jpa.properties.hibernate.jdbc.batch_size}")
+    private int batchSize;
 }

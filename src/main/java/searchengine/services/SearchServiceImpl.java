@@ -29,7 +29,7 @@ public class SearchServiceImpl implements SearchService {
     private final LemmaRepository lemmaRepository;
     @Autowired
     private final IndexRepository indexRepository;
-    private final int maxPagesForLemma = 1000;
+    private final int maxPagesForLemma = 1000; //TODO: сделать, чтобы бралось из настроек
     private boolean isLastSite = false;
     @Override
     public SearchResponse search(String query, String site, int offset, int limit) {
@@ -95,7 +95,8 @@ public class SearchServiceImpl implements SearchService {
         Set<Integer> firstPagesIdsByLemmaFromIndex = new HashSet<>();
 
         if (!lemmaEntities.isEmpty()) {
-            firstPagesIdsByLemmaFromIndex = indexRepository.findPagesIdsByLemmaId(lemmaEntities.first().getId());
+            firstPagesIdsByLemmaFromIndex = indexRepository
+                    .findPagesIdsByLemmaId(lemmaEntities.first().getId());
         }
         if (lemmas.size() == 1) {
             return firstPagesIdsByLemmaFromIndex.size() <= maxPagesForLemma ?
@@ -117,7 +118,10 @@ public class SearchServiceImpl implements SearchService {
         return lemmaEntities;
     }
 
-    private Set<Page> getMatchedPages(TreeSet<Lemma> lemmaEntitys, Set<Integer> firstPagesIdsByLemmaFromIndex) {
+    private Set<Page> getMatchedPages(
+            TreeSet<Lemma> lemmaEntitys,
+            Set<Integer> firstPagesIdsByLemmaFromIndex
+    ) {
         Set<Page> matchedPages = new HashSet<>();
         Set<Page> pagesByLemmaFromIndex = new HashSet<>();
         Set<Integer> nextPagesIdsByLemmaFromIndex = new HashSet<>();
@@ -125,18 +129,26 @@ public class SearchServiceImpl implements SearchService {
         for (Lemma lemmaEntity : lemmaEntitys) {
 
             if (!lemmaEntity.equals(lemmaEntitys.first())) {
-                nextPagesIdsByLemmaFromIndex = indexRepository.findPagesIdsByLemmaId(lemmaEntity.getId());
+                nextPagesIdsByLemmaFromIndex = indexRepository
+                        .findPagesIdsByLemmaId(lemmaEntity.getId());
             }
             if (firstPagesIdsByLemmaFromIndex.size() < maxPagesForLemma) {
-                pagesByLemmaFromIndex.addAll(pageRepository.findAllById(firstPagesIdsByLemmaFromIndex));
+                pagesByLemmaFromIndex.addAll(pageRepository
+                        .findAllById(firstPagesIdsByLemmaFromIndex));
             }
 
             for (int pageIdByLemmaFromIndex : firstPagesIdsByLemmaFromIndex) {
 
-                if (nextPagesIdsByLemmaFromIndex.stream().anyMatch(pageId -> pageId == pageIdByLemmaFromIndex)) {
+                if (nextPagesIdsByLemmaFromIndex.stream()
+                        .anyMatch(pageId -> pageId == pageIdByLemmaFromIndex)) {
                     matchedPages.addAll(pagesByLemmaFromIndex.stream()
-                            .filter(page -> page.getId() == pageIdByLemmaFromIndex).toList());
-                    firstPagesIdsByLemmaFromIndex = Set.copyOf(matchedPages.stream().map(Page::getId).toList());
+                            .filter(page -> page.getId() == pageIdByLemmaFromIndex)
+                            .toList()
+                    );
+                    firstPagesIdsByLemmaFromIndex = Set.copyOf(matchedPages.stream()
+                            .map(Page::getId)
+                            .toList()
+                    );
                 }
             }
         }
@@ -145,8 +157,10 @@ public class SearchServiceImpl implements SearchService {
 
     private Set<String> getLemmaCheckedForDuplicate(Set<String> lemmas, String query) {
         String[] queryWords = query.split("(?<=-|\\s)");
-        List<String> tempLemmas = lemmas.stream().sorted(Comparator.comparingInt(String::length)).toList();
         Set<String> checkedLemmas = new HashSet<>();
+        List<String> tempLemmas = lemmas.stream()
+                .sorted(Comparator.comparingInt(String::length))
+                .toList();
         for (String queryWord : queryWords) {
             int lemmaCount = 0;
             boolean finded = false;
@@ -201,8 +215,10 @@ public class SearchServiceImpl implements SearchService {
         char bigFirstChar = lemma.toUpperCase().charAt(0);
         char lowFirstChar = lemma.toLowerCase().charAt(0);
 
-        text = text.replaceAll("Ё", "Е").replaceAll("ё", "е");
-        lemma = lemma.replaceAll("Ё", "Е").replaceAll("ё", "е");
+        text = text.replaceAll("Ё", "Е")
+                .replaceAll("ё", "е");
+        lemma = lemma.replaceAll("Ё", "Е")
+                .replaceAll("ё", "е");
 
         if (lemma.charAt(lemma.length() - 1) == 'ь') {
             lemma = lemma.substring(0, lemma.length() - 1);
@@ -291,8 +307,11 @@ public class SearchServiceImpl implements SearchService {
                 .replaceAll("<.?h.>","");
     }
     private double getAbsoluteRelevance(Page page, Set<String> lemmas) {
-        TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(lemmas, page.getSite().getId());
         Set<Index> indices = new HashSet<>();
+        TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(
+                lemmas, page.getSite().getId()
+        );
+
         lemmaEntities.forEach(lemma -> indices.add(indexRepository
                 .findByPageIdAndLemmaId(page.getId(), lemma.getId())));
 
@@ -301,7 +320,9 @@ public class SearchServiceImpl implements SearchService {
                 .map(Index::getRank)
                 .map(Float::doubleValue)
                 .toList());
-        double maxRank = Ranks.stream().max(Comparator.comparingDouble(Double::doubleValue)).get();
+        double maxRank = Ranks.stream()
+                .max(Comparator.comparingDouble(Double::doubleValue))
+                .get();
         double sumRanks = 0;
         for (Double rank : Ranks) {
             sumRanks += rank;

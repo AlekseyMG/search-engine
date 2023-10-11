@@ -9,14 +9,20 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+        order_inserts: true
+        order_updates: true
+        batch_versioned_data: true
+        generate_statistics: false
+        jdbc:
+          batch_size: 500
     hibernate:
-      ddl-auto: create #create-drop, create, update
+      ddl-auto: create # create-drop, create, update
     show-sql: false
 
 indexing-settings:
   sites:
-    - url: https://volochek.life #https://www.lenta.ru
-      name: Volochek.Life #Лента.ру
+    - url: https://volochek.life
+      name: Volochek.Life
     - url: https://www.skillbox.ru
       name: Skillbox
     - url: https://www.playback.ru
@@ -25,8 +31,8 @@ indexing-settings:
       name: Тест несуществующего сайта
 
 parser-setting:
-  user-agent: LocoBOT/0.0.2 (indexing and search engine) #"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36";
+  user-agent: MG_Indexing_Bot/1.0.0 (Indexing and search engine) # "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36";
   referrer: https://google.ru
-  random-delay-delta-before-connection: 5000
+  random-delay-delta-before-connection: 2000
   min-delay-before-connection: 1000
-  connection-timeout: 3000
+  connection-timeout: 10000
