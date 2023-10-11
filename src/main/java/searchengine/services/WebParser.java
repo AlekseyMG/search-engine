@@ -36,8 +36,6 @@ public class WebParser extends RecursiveTask<String> {
     private final int siteId;
     List<WebParser> subTasks = new LinkedList<>();
     int statusCode = 0;
-//    @PersistenceContext
-//    private EntityManagerFactory emf;
 
     public WebParser(String absolutePath, Site currentSiteEntity, IndexingServiceImpl indexingServiceImpl) {
         this.absolutePath = absolutePath.replaceAll("www.", "");
@@ -65,11 +63,6 @@ public class WebParser extends RecursiveTask<String> {
 
         Set<String> links = saveCurrentPageAndGetLinks();
 
-//        if (!indexingServiceImpl.isRunning) {
-//            stop();
-//            return "";
-//        }
-
         if (links.isEmpty()) {
             return "";
         }
@@ -90,9 +83,9 @@ public class WebParser extends RecursiveTask<String> {
         saveCurrentPageAndGetLinks();
         return statusCode;
     }
+
     private Set<String> saveCurrentPageAndGetLinks() {
         Set<String> links = new HashSet<>();
-//        String url = "";
         Connection.Response response = null;
         String errorMessage = "";
         Document htmlDoc = new Document("");
@@ -116,37 +109,7 @@ public class WebParser extends RecursiveTask<String> {
                     .execute();
 
             htmlDoc = connection.get();
-            //statusCode = response == null ? 0 : response.statusCode();
             statusCode = response.statusCode();
-
-//            Elements htmlLinks = htmlDoc.select("a[href]");
-//
-//            for (Element link : htmlLinks) {
-//                url = link.attr("abs:href").replaceAll("www.","").toLowerCase();
-//
-//                if (url.contains(siteUrl) &&
-//                        !url.equals(absolutePath) &&
-//                        !url.contains("#") &&
-//                        !url.contains("@") &&
-//                        !url.contains(".com") &&
-//                        !url.contains(".pdf") &&
-//                        !url.contains(".php") &&
-//                        !url.contains(".png") &&
-//                        !url.contains(".jpg") &&
-//                        !url.contains(".jpeg") &&
-//                        !url.contains(".gif") &&
-//                        !url.contains("upload") &&
-//                        !url.contains("img") &&
-//                        !url.contains("image") //&&
-//                ) {
-//                    if (pageRepository.findBySiteIdAndPath(siteId, url.replaceAll(siteUrl,"")) == null) {
-//                        savePage(0, "", url.replaceAll(siteUrl,""));
-//                        links.add(url);
-//                    }
-//                }
-//
-//            }
-
             links = getLinksFromHTML(htmlDoc);
 
         } catch (SocketTimeoutException ex) {
@@ -185,14 +148,9 @@ public class WebParser extends RecursiveTask<String> {
             errorMessage = ErrorMessages.errorAddEntityToDB + (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
             System.out.println(errorMessage);
         }
-        //String currentPagePath = absolutePath.equals(siteUrl + "/") ? "/" : absolutePath.replaceAll(siteUrl,"");
         savePage(statusCode, htmlDoc.html(), relativePath);
         updateSiteStatus(errorMessage);
-//
-//        htmlDoc = null;
-//        response = null;
-//        errorMessage = "";
-//
+
         return links;
     }
 
@@ -205,8 +163,6 @@ public class WebParser extends RecursiveTask<String> {
     }
 
     private Set<String> getLinksFromHTML(Document htmlDoc) {
-//        String[] skipList = new String[]{"#", "@", ".com", ".pdf", ".php",
-//                ".png", ".jpg", ".jpeg", ".gif", "upload", "img", "image"};
         Set<String> links = new HashSet<>();
         String parsedLinkAbsolutePath;
         String parsedLinkRelativePath;
@@ -215,21 +171,10 @@ public class WebParser extends RecursiveTask<String> {
         for (Element link : htmlLinks) {
             parsedLinkAbsolutePath = link.attr("abs:href").replaceAll("www.","").toLowerCase();
             parsedLinkRelativePath = parsedLinkAbsolutePath.replaceAll(siteUrl,"");
+
             if (parsedLinkAbsolutePath.contains(siteUrl) &&
                     !parsedLinkAbsolutePath.equals(absolutePath) &&
-                    !indexingServiceImpl.isMatchedWithSkipList(parsedLinkAbsolutePath) //&&
-//                    !parsedLinkAbsolutePath.contains("#") &&
-//                    !parsedLinkAbsolutePath.contains("@") &&
-//                    !parsedLinkAbsolutePath.contains(".com") &&
-//                    !parsedLinkAbsolutePath.contains(".pdf") &&
-//                    !parsedLinkAbsolutePath.contains(".php") &&
-//                    !parsedLinkAbsolutePath.contains(".png") &&
-//                    !parsedLinkAbsolutePath.contains(".jpg") &&
-//                    !parsedLinkAbsolutePath.contains(".jpeg") &&
-//                    !parsedLinkAbsolutePath.contains(".gif") &&
-//                    !parsedLinkAbsolutePath.contains("upload") &&
-//                    !parsedLinkAbsolutePath.contains("img") &&
-//                    !parsedLinkAbsolutePath.contains("image") //&&
+                    !indexingServiceImpl.isMatchedWithSkipList(parsedLinkAbsolutePath)
             ) {
                 if (pageRepository.findBySiteIdAndPath(siteId, parsedLinkRelativePath) == null) {
                     savePage(0, "", parsedLinkRelativePath);
@@ -240,15 +185,6 @@ public class WebParser extends RecursiveTask<String> {
         }
         return links;
     }
-
-//    private boolean isNotMatchedWithSkipList(String linkAbsolutePath, String[] skipList) {
-//        for (String skipString : skipList) {
-//            if (linkAbsolutePath.contains(skipString)) {
-//                return false;
-//            }
-//        }
-//        return true;
-//    }
 
     private void savePage(int statusCode, String content, String pagePath) {
         Page page = pageRepository.findBySiteIdAndPath(siteId, pagePath);
@@ -266,13 +202,10 @@ public class WebParser extends RecursiveTask<String> {
         if (statusCode == 200) {
             saveLemma(page, content);
         }
-//        page = null;
     }
 
     private void saveLemma(Page page, String content) {
         try {
-//            ArrayList<Index> indexList = new ArrayList<>();
-//            StringBuilder indexInsertQuery = new StringBuilder();
             LemmaFinder lemmaFinder = new LemmaFinder(new RussianLuceneMorphology());
             lemmaFinder.collectLemmasFromHTML(content).forEach((normalWord, integer) -> {
                 Lemma lemma = lemmaRepository.findBySiteIdAndLemma(currentSiteEntity.getId(), normalWord);
@@ -281,80 +214,14 @@ public class WebParser extends RecursiveTask<String> {
                     lemma = new Lemma();
                     lemma.setFrequency(0);
                 }
-//
-//                Index index = indexRepository.findByPageIdAndLemmaId(page.getId(), lemma.getId());
-//
-//                if (index == null) {
-//                    Index index = new Index();
-//                }
-//
+
                 lemma.setLemma(normalWord);
                 lemma.setSite(currentSiteEntity);
                 lemma.setFrequency(lemma.getFrequency() + 1);
-//
-//                indexInsertQuery.append(indexInsertQuery.length() == 0 ? "" : ",")
-//                        .append("('")
-//                        .append(page)
-//                        .append("', '")
-//                        .append(lemma)
-//                        .append("', ")
-//                        .append(integer)
-//                        .append(")");
-
-//                if (indexInsertQuery.length()) {
-//                    indexRepository.insertData(indexInsertQuery.toString());
-//                    indexInsertQuery = new StringBuilder();
-//                }
-//
                 lemmaRepository.saveAndFlush(lemma);
                 saveIndex(page, lemma, integer);
             });
-//
-//            EntityManager em = emf.createEntityManager();
-//
-//            Query query = em.createNativeQuery("INSERT INTO `index` (`id`, `lemma_id`, `page_id`, `rank`) VALUES (`1`, `1`, `1`, `1`)");
-//            em.getTransaction().begin();
-//            query.executeUpdate();
-//            em.getTransaction().commit();
-//            em.close();
-//
-//            ArrayList<Integer> list1 = new ArrayList<>();
-//            list1.add(1);
-//            list1.add(2);
-//            list1.add(1);
-//
-//            List<IndexItem> indexItems = new ArrayList<>();
-//            IndexItem indexItem = new IndexItem();
-//            indexItem.setPageId(2);
-//            indexItem.setLemmaId(88);
-//            indexItem.setRank((float) 0.9);
-//            indexItems.add(indexItem);
-//            //indexInsertQuery.append("(3, 88, 1.0)");
-//            JsonArray jsonValues = new JsonArray();
-//            jsonValues.add(0, new JsonString().setValue("(1,1,0.9"));
 
-            //indexRepository.insertData("\"(1,1,0.9)\"");
-
-
-
-//            for (Index index : indexList) {
-//                indexInsertQuery.append(indexInsertQuery.length() == 0 ? "" : ",")
-//                        .append("(`")
-//                        .append(page.getId())
-//                        .append("`, `")
-//                        .append(index.getLemma().getId())
-//                        .append("`, `")
-//                        .append(index.getRank())
-//                        .append("`)");
-//                if (indexInsertQuery.length() > 50_000_000) {
-//                    indexRepository.insertData(indexInsertQuery + ";");
-//                    indexInsertQuery = new StringBuilder();
-//                }
-//            }
-//            indexRepository.insertData(indexInsertQuery + ";");
-
-//            indexRepository.saveAllAndFlush(indexList);
-//
         } catch (IOException ex) {
             ex.printStackTrace();
         }
@@ -391,9 +258,9 @@ public class WebParser extends RecursiveTask<String> {
                     lemmaRepository.saveAndFlush(lemma);
                 }
             });
-
         }
     }
+
     private void stop() {
         currentSiteEntity.setStatus(StatusType.FAILED);
         currentSiteEntity.setLastError("Прервано пользователем");

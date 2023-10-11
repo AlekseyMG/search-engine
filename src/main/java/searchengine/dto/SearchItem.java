@@ -9,16 +9,6 @@ import java.util.Objects;
 @Setter
 @AllArgsConstructor
 public class SearchItem {
-//        "site": "http://www.site.com",
-//        "siteName": "Имя сайта",
-//        "uri": "/path/to/page/6784",
-//        "title": "Заголовок страницы,
-//                  которую выводим",
-//        "snippet": "Фрагмент текста,
-//                      в котором найдены
-//                      совпадения, <b>выделенные
-//                      жирным</b>, в формате HTML",
-//        "relevance": 0.93362
     private String site;
     private String siteName;
     private String uri;

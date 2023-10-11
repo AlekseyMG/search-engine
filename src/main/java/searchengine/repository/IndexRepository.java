@@ -11,7 +11,6 @@ import java.util.HashSet;
 
 @Repository
 public interface IndexRepository extends JpaRepository<Index, Integer> {
-    //public String query1 = "(3, 88, 1.0)";
     @Query(value = "SELECT * FROM `index` WHERE page_id=?1 AND lemma_id=?2", nativeQuery = true)
     public Index findByPageIdAndLemmaId(int pageId, int lemmaId);
 
@@ -35,10 +34,6 @@ public interface IndexRepository extends JpaRepository<Index, Integer> {
             "FROM `index`, page " +
             "WHERE index.page_id = page.id and page.site_id=?1", nativeQuery = true)
     public Float getLemmaCountBySiteId(int siteId);
-//    @Modifying
-//    @Transactional
-//    @Query(value = "INSERT INTO `index` (`lemma_id`, `page_id`, `rank`) VALUES ", nativeQuery = true)
-//    public void insertData(String jsonValues);
 
     @Modifying
     @Transactional

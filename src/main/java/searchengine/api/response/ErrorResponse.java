@@ -2,7 +2,6 @@ package searchengine.api.response;
 
 import lombok.Getter;
 
-//@Data
 @Getter
 public class ErrorResponse extends DefaultResponse {
 

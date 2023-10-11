@@ -3,35 +3,27 @@ package searchengine.services;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import searchengine.config.SitesList;
 import searchengine.dto.statistics.DetailedStatisticsItem;
 import searchengine.dto.statistics.StatisticsData;
 import searchengine.api.response.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
 import searchengine.repository.IndexRepository;
-import searchengine.repository.LemmaRepository;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
 public class StatisticsServiceImpl implements StatisticsService {
-
-    private final Random random = new Random();
-    private final SitesList sites;
     @Autowired
     private final PageRepository pageRepository;
     @Autowired
     private final SiteRepository siteRepository;
     @Autowired
     private final IndexRepository indexRepository;
-    @Autowired
-    private final LemmaRepository lemmaRepository;
 
     @Override
     public StatisticsResponse getStatistics() {
@@ -74,5 +66,4 @@ public class StatisticsServiceImpl implements StatisticsService {
         }
         return Math.round(LemmaCount);
     }
-
 }
