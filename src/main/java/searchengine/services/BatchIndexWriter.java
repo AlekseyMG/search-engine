@@ -2,6 +2,7 @@ package searchengine.services;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
@@ -32,27 +33,31 @@ public class BatchIndexWriter {
     }
 
     public synchronized void close() {
-        bulkSave(indices);
-        entityManager.flush();
-        entityManager.clear();
+        if (!indices.isEmpty()) {
+            bulkSave(indices);
+            entityManager.flush();
+            entityManager.clear();
+        }
     }
 
     public synchronized void bulkSave(List<Index> entities) throws ConstraintViolationException {
-        System.out.println("++++++++++bulkSave+++++++");
+        StringBuilder insertQuery = new StringBuilder();
         int i = 0;
         for (Index index : entities) {
-
-            if (index.getId() == null) {
-                entityManager.persist(index);
-            } else {
-                entityManager.merge(index);
-            }
-            i++;
-
-            if (i % parserSetting.getBatchSize() == 0) {
-                entityManager.flush();
-                entityManager.clear();
-            }
+            insertQuery.append(insertQuery.length() == 0 ? "" : ",")
+                    .append("('")
+                    .append(index.getLemma().getId())
+                    .append("', '")
+                    .append(index.getPage().getId())
+                    .append("', '")
+                    .append(index.getRank())
+                    .append("')");
         }
+        String firstQueryPart = "INSERT INTO `index` (`lemma_id`, `page_id`, `rank`) VALUES ";
+        System.out.println(firstQueryPart + insertQuery);
+        Query query = entityManager.createNativeQuery(firstQueryPart + insertQuery);
+        query.executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
     }
 }

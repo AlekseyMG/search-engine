@@ -308,21 +308,24 @@ public class SearchServiceImpl implements SearchService {
     }
     private double getAbsoluteRelevance(Page page, Set<String> lemmas) {
         Set<Index> indices = new HashSet<>();
+        List<Double> Ranks = new ArrayList<>();
+        double maxRank = 0;
         TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(
                 lemmas, page.getSite().getId()
         );
 
         lemmaEntities.forEach(lemma -> indices.add(indexRepository
                 .findByPageIdAndLemmaId(page.getId(), lemma.getId())));
-
-        List<Double> Ranks = new ArrayList<>(indices.stream()
-                .filter(Objects::nonNull)
-                .map(Index::getRank)
-                .map(Float::doubleValue)
-                .toList());
-        double maxRank = Ranks.stream()
+        if (!indices.isEmpty()) {
+            Ranks = new ArrayList<>(indices.stream()
+                    .filter(Objects::nonNull)
+                    .map(Index::getRank)
+                    .map(Float::doubleValue)
+                    .toList());
+            maxRank = Ranks.stream()
                 .max(Comparator.comparingDouble(Double::doubleValue))
                 .get();
+        }
         double sumRanks = 0;
         for (Double rank : Ranks) {
             sumRanks += rank;

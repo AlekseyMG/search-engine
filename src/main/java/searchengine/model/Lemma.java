@@ -8,7 +8,7 @@ import lombok.Data;
 @Entity
 @Table(name = "lemma",
         indexes = {
-                @Index(name = "lemma_index", columnList = "lemma, site_id", unique = true)
+                @Index(name = "lemma_index", columnList = "lemma, site_id")
         })
 public class Lemma {
     @Id

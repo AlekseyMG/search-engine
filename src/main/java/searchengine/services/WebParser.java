@@ -205,16 +205,13 @@ public class WebParser extends RecursiveTask<String> {
     }
 
     private void saveLemma(Page page, String content) {
-        //AtomicBoolean isNewLemma = new AtomicBoolean(false);
         try {
             LemmaFinder lemmaFinder = new LemmaFinder(new RussianLuceneMorphology());
             lemmaFinder.collectLemmasFromHTML(content).forEach((normalWord, integer) -> {
                 Lemma lemma = lemmaRepository.findBySiteIdAndLemma(currentSiteEntity.getId(), normalWord);
-                boolean isNewLemma = false;
                 if (lemma == null) {
                     lemma = new Lemma();
                     lemma.setFrequency(0);
-                    isNewLemma = true;
                 }
 
                 lemma.setLemma(normalWord);
@@ -222,9 +219,7 @@ public class WebParser extends RecursiveTask<String> {
                 lemma.setFrequency(lemma.getFrequency() + 1);
                 lemmaRepository.saveAndFlush(lemma);
 
-                if (isNewLemma) {
-                    saveIndex(page, lemma, integer);
-                }
+                saveIndex(page, lemma, integer);
             });
 
         } catch (IOException ex) {

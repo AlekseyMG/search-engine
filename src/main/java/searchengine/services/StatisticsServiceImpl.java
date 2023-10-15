@@ -8,6 +8,7 @@ import searchengine.dto.statistics.StatisticsData;
 import searchengine.api.response.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
 import searchengine.repository.IndexRepository;
+import searchengine.repository.LemmaRepository;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 
@@ -23,7 +24,9 @@ public class StatisticsServiceImpl implements StatisticsService {
     @Autowired
     private final SiteRepository siteRepository;
     @Autowired
-    private final IndexRepository indexRepository;
+    private final LemmaRepository lemmaRepository;
+//    @Autowired
+//    private final IndexRepository indexRepository;
 
     @Override
     public StatisticsResponse getStatistics() {
@@ -37,7 +40,7 @@ public class StatisticsServiceImpl implements StatisticsService {
             item.setName(site.getName());
             item.setUrl(site.getUrl());
             int pages = pageRepository.getPagesCountBySiteId(site.getId());
-            int lemmas = getLemmaCount(site.getId());
+            int lemmas = lemmaRepository.getCountBySiteId(site.getId());
             item.setPages(pages);
             item.setLemmas(lemmas);
             item.setStatus(site.getStatus().name());
@@ -59,11 +62,11 @@ public class StatisticsServiceImpl implements StatisticsService {
         return response;
     }
 
-    private int getLemmaCount (int siteId) {
-        Float LemmaCount = indexRepository.getLemmaCountBySiteId(siteId);
-        if (LemmaCount == null) {
-            return 0;
-        }
-        return Math.round(LemmaCount);
-    }
+//    private int getLemmaCount (int siteId) {
+//        Float LemmaCount = indexRepository.getLemmaCountBySiteId(siteId);
+//        if (LemmaCount == null) {
+//            return 0;
+//        }
+//        return Math.round(LemmaCount);
+//    }
 }

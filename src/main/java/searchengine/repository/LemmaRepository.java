@@ -16,6 +16,9 @@ public interface LemmaRepository extends JpaRepository<Lemma, Integer> {
     @Query(value = "SELECT * FROM lemma WHERE site_id=?1", nativeQuery = true)
     public HashSet<Lemma> findBySiteId(int siteId);
 
+    @Query(value = "SELECT count(*) FROM lemma WHERE site_id=?1", nativeQuery = true)
+    public int getCountBySiteId(int siteId);
+
     @Modifying
     @Transactional
     @Query(value = "DELETE FROM lemma WHERE site_id=?1", nativeQuery = true)
