@@ -166,8 +166,8 @@ public class SearchServiceImpl implements SearchService {
             boolean finded = false;
             while (true) {
                 for (String lemma : tempLemmas) {
-                    if (lemma.contains(queryWord.substring(0, queryWord.length() - lemmaCount))) {
-                        checkedLemmas.add(lemma);
+                    if (lemma.contains(queryWord.toLowerCase().substring(0, queryWord.length() - lemmaCount))) {
+                        checkedLemmas.add(lemma.toLowerCase());
                         finded = true;
                         break;
                     }
@@ -196,13 +196,16 @@ public class SearchServiceImpl implements SearchService {
         );
     }
     private void setRelativeRelevance() {
-        double maxAbsoluteRelevance = searchResult.stream()
-                .map(SearchItem::getRelevance)
-                .max(Comparator.comparingDouble(Double::doubleValue))
-                .get();
-
-        searchResult.forEach(searchItem -> searchItem
-                .setRelevance(searchItem.getRelevance() / maxAbsoluteRelevance));
+        double maxAbsoluteRelevance = 0;
+        if (!searchResult.isEmpty()) {
+            maxAbsoluteRelevance = searchResult.stream()
+                    .map(SearchItem::getRelevance)
+                    .max(Comparator.comparingDouble(Double::doubleValue))
+                    .get();
+        }
+        for (SearchItem searchItem : searchResult) {
+            searchItem.setRelevance(searchItem.getRelevance() / maxAbsoluteRelevance);
+        }
     }
 
     private String getSnippet(String pageText, Set<String> lemmas) {
@@ -268,7 +271,7 @@ public class SearchServiceImpl implements SearchService {
         String firstWords;
         List<StringBuilder> snippets = new ArrayList<>();
         int charsContAroundWord = 140;
-        int exponent = 20;
+        int exponent = 26;
         while (pageText.contains("<b>")) {
             snippet = new StringBuilder();
 
@@ -283,11 +286,12 @@ public class SearchServiceImpl implements SearchService {
 
             pageText = pageText.substring(pageText.indexOf("</b>") + 4);
 
-            if (charsContAroundWord > 8 && exponent > 0) {
-                exponent -= 4;
-                charsContAroundWord = charsContAroundWord - exponent - 6;
+            if (charsContAroundWord > 6 && exponent > 0) {
+                exponent -= 2;
+                charsContAroundWord = charsContAroundWord - exponent - 4;
             }
         }
+        charsContAroundWord = Math.max(charsContAroundWord, 3);
         StringBuilder finalSnippet = new StringBuilder();
         for (StringBuilder snip : snippets) {
             int startIndex = Math.max(snip.toString().indexOf("<b>") -
@@ -308,7 +312,7 @@ public class SearchServiceImpl implements SearchService {
     }
     private double getAbsoluteRelevance(Page page, Set<String> lemmas) {
         Set<Index> indices = new HashSet<>();
-        List<Double> Ranks = new ArrayList<>();
+        List<Double> ranks = new ArrayList<>();
         double maxRank = 0;
         TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(
                 lemmas, page.getSite().getId()
@@ -317,17 +321,17 @@ public class SearchServiceImpl implements SearchService {
         lemmaEntities.forEach(lemma -> indices.add(indexRepository
                 .findByPageIdAndLemmaId(page.getId(), lemma.getId())));
         if (!indices.isEmpty()) {
-            Ranks = new ArrayList<>(indices.stream()
+            ranks = new ArrayList<>(indices.stream()
                     .filter(Objects::nonNull)
                     .map(Index::getRank)
                     .map(Float::doubleValue)
                     .toList());
-            maxRank = Ranks.stream()
+            maxRank = ranks.stream()
                 .max(Comparator.comparingDouble(Double::doubleValue))
                 .get();
         }
         double sumRanks = 0;
-        for (Double rank : Ranks) {
+        for (Double rank : ranks) {
             sumRanks += rank;
         }
         return sumRanks / maxRank;

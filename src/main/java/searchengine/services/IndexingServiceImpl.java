@@ -60,11 +60,11 @@ public class IndexingServiceImpl implements IndexingService {
     }
     @Override
     public DefaultResponse startIndexing() {
-////------------------------------------------------------------------// Отключена кнопка Start Indexing,
-//        if (isStoppedByUser) {                                      // чтобы всякие хулиганы не запускали
-//            return new ErrorResponse("Не трогай эту кнопку!"); //  долгую полную индексацию.
-//        }                                                           // Закоментируйте этот код, чтобы включить
-////------------------------------------------------------------------// кнопку обратно и запустить индексацию.
+//------------------------------------------------------------------// Отключена кнопка Start Indexing,
+        if (isStoppedByUser) {                                      // чтобы всякие хулиганы не запускали
+            return new ErrorResponse("Не трогай эту кнопку!"); //  долгую полную индексацию.
+        }                                                           // Закоментируйте этот код, чтобы включить
+//------------------------------------------------------------------// кнопку обратно и запустить индексацию.
         for (Thread thread : threads) {
             if (thread.isAlive()) {
                 return new ErrorResponse("Индексация уже запущена");
@@ -103,6 +103,7 @@ public class IndexingServiceImpl implements IndexingService {
         if (statusCode.get() != 200) {
             return new ErrorResponse("Страница недоступна");
         }
+        batchIndexWriter.close();
         return new DefaultResponse();
     }
 
