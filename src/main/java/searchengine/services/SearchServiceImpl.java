@@ -119,16 +119,16 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private Set<Page> getMatchedPages(
-            TreeSet<Lemma> lemmaEntitys,
+            TreeSet<Lemma> lemmaEntities,
             Set<Integer> firstPagesIdsByLemmaFromIndex
     ) {
         Set<Page> matchedPages = new HashSet<>();
         Set<Page> pagesByLemmaFromIndex = new HashSet<>();
         Set<Integer> nextPagesIdsByLemmaFromIndex = new HashSet<>();
 
-        for (Lemma lemmaEntity : lemmaEntitys) {
+        for (Lemma lemmaEntity : lemmaEntities) {
 
-            if (!lemmaEntity.equals(lemmaEntitys.first())) {
+            if (!lemmaEntity.equals(lemmaEntities.first())) {
                 nextPagesIdsByLemmaFromIndex = indexRepository
                         .findPagesIdsByLemmaId(lemmaEntity.getId());
             }

@@ -16,4 +16,9 @@ public interface SiteRepository extends JpaRepository<Site, Integer> {
 
     @Query(value = "SELECT * FROM site WHERE url LIKE %?1%", nativeQuery = true)
     public Site findByUrl(String url);
+
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM site WHERE id=?1", nativeQuery = true)
+    public void deleteBySiteId(int siteId);
 }

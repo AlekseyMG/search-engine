@@ -209,6 +209,7 @@ public class WebParser extends RecursiveTask<String> {
             LemmaFinder lemmaFinder = new LemmaFinder(new RussianLuceneMorphology());
             lemmaFinder.collectLemmasFromHTML(content).forEach((normalWord, integer) -> {
                 Lemma lemma = lemmaRepository.findBySiteIdAndLemma(currentSiteEntity.getId(), normalWord);
+                //boolean isNewLemma = false;
                 if (lemma == null) {
                     lemma = new Lemma();
                     lemma.setFrequency(0);

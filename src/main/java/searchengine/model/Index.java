@@ -7,7 +7,6 @@ import lombok.Data;
 @Entity
 @Table(name = "`index`",
         indexes = {
-                @jakarta.persistence.Index(name = "rank_index", columnList = "`rank`"),
                 @jakarta.persistence.Index(name = "page_index", columnList = "page_id, lemma_id")
         })
 public class Index {
@@ -16,14 +15,14 @@ public class Index {
     private Integer id;
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "page_id", referencedColumnName = "id")
+    @JoinColumn(name = "page_id", referencedColumnName = "id", nullable = false)
     //@Column(name = "page_id", nullable = false)
     //private int pageId;
     private Page page;
 
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "lemma_id", referencedColumnName = "id")
+    @JoinColumn(name = "lemma_id", referencedColumnName = "id", nullable = false)
    // @Column(name = "lemma_id", nullable = false)
    // private int lemmaId;
     private Lemma lemma;

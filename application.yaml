@@ -16,7 +16,7 @@ spring:
         jdbc:
           batch_size: 1000
     hibernate:
-      ddl-auto: create # create-drop, create, update
+      ddl-auto: update # create-drop, create, update
     show-sql: false
 
 indexing-settings:

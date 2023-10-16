@@ -16,7 +16,7 @@ public class Lemma {
     private int id;
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "site_id", referencedColumnName = "id")
+    @JoinColumn(name = "site_id", referencedColumnName = "id", nullable = false)
     private Site site;
 
     @Column(nullable = false)

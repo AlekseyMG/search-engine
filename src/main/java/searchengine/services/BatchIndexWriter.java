@@ -28,7 +28,6 @@ public class BatchIndexWriter {
         indices.add(index);
         if (indices.size() + 1 > parserSetting.getBatchSize()) {
             bulkSave(indices);
-            indices = Collections.synchronizedList(new ArrayList<>());
         }
     }
 
@@ -54,10 +53,11 @@ public class BatchIndexWriter {
                     .append("')");
         }
         String firstQueryPart = "INSERT INTO `index` (`lemma_id`, `page_id`, `rank`) VALUES ";
-        System.out.println(firstQueryPart + insertQuery);
+        System.out.println(firstQueryPart + "of " + indices.size() + " index entities.");
         Query query = entityManager.createNativeQuery(firstQueryPart + insertQuery);
         query.executeUpdate();
         entityManager.flush();
         entityManager.clear();
+        indices = Collections.synchronizedList(new ArrayList<>());
     }
 }

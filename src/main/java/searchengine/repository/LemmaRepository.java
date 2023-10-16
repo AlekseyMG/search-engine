@@ -10,7 +10,7 @@ import java.util.HashSet;
 
 @Repository
 public interface LemmaRepository extends JpaRepository<Lemma, Integer> {
-    @Query(value = "SELECT * FROM lemma WHERE site_id=?1 AND lemma=?2", nativeQuery = true)
+    @Query(value = "SELECT * FROM lemma WHERE site_id=?1 AND lemma=?2 limit 1", nativeQuery = true)
     public Lemma findBySiteIdAndLemma(int siteId, String word);
 
     @Query(value = "SELECT * FROM lemma WHERE site_id=?1", nativeQuery = true)

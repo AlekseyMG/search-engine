@@ -133,6 +133,7 @@ public class IndexingServiceImpl implements IndexingService {
                     } catch (Exception ex) {
                         newSite.setLastError(ErrorMessages.unknownIndexingError + ex);
                         System.out.println("+++++ " + ex + " ++++++");
+                        ex.printStackTrace();
                         newSite.setStatus(StatusType.FAILED);
                     }
                     finally {
@@ -150,7 +151,7 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void clearDataByUrlList() {
-        indexRepository.deleteAll();
+       // indexRepository.deleteAll();
         settingSites.getSites()
                 .stream()
                 .map(searchengine.config.Site::getUrl)
@@ -159,9 +160,16 @@ public class IndexingServiceImpl implements IndexingService {
                                          .replaceAll("www.", "");
                     siteRepository.findAll().forEach(site -> {
                         if (site.getUrl().contains(shortUrl)) {
+                            System.out.println("Удаляем все для сайта №" + site.getId() + " " + site.getName());
+                            System.out.println("Удаляем из таблицы index");
+                            pageRepository.findPagesBySiteId(site.getId())
+                                    .forEach(page -> indexRepository.deleteByPageId(page.getId()));
+                            System.out.println("Удаляем из таблицы lemma");
                             lemmaRepository.deleteBySiteId(site.getId());
+                            System.out.println("Удаляем из таблицы page");
                             pageRepository.deleteBySiteId(site.getId());
-                            siteRepository.deleteById(site.getId());
+                            System.out.println("Удаляем из таблицы site");
+                            siteRepository.deleteBySiteId(site.getId());
                         }
                     });
                 });
