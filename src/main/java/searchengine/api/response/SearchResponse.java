@@ -12,8 +12,8 @@ public class SearchResponse {
     private int count;
     private List<SearchItem> data;
 
-    public SearchResponse(List<SearchItem> data) {
+    public SearchResponse(List<SearchItem> data, int count) {
         this.data = data;
-        this.count = data.size();
+        this.count = count;
     }
 }

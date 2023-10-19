@@ -6,6 +6,8 @@ import org.jsoup.Jsoup;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import searchengine.api.response.SearchResponse;
+import searchengine.config.ParserSetting;
+import searchengine.config.SearchSetting;
 import searchengine.dto.SearchItem;
 import searchengine.model.Index;
 import searchengine.model.Lemma;
@@ -21,6 +23,10 @@ import java.util.*;
 @RequiredArgsConstructor
 public class SearchServiceImpl implements SearchService {
     private ArrayList<SearchItem> searchResult = new ArrayList<>();
+    private String lastQuery;
+    private String lastQuerySite;
+    private final SearchSetting searchSetting;
+    private final ParserSetting parserSetting;
     @Autowired
     private final SiteRepository siteRepository;
     @Autowired
@@ -29,11 +35,19 @@ public class SearchServiceImpl implements SearchService {
     private final LemmaRepository lemmaRepository;
     @Autowired
     private final IndexRepository indexRepository;
-    private final int maxPagesForLemma = 1000; //TODO: сделать, чтобы бралось из настроек
+    private int maxPagesForLemma;
     private boolean isLastSite = false;
     @Override
     public SearchResponse search(String query, String site, int offset, int limit) {
+        if (!searchResult.isEmpty() && query.equals(lastQuery) && site.equals(lastQuerySite)) {
+            return new SearchResponse(searchResult
+                    .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(offset, limit)),
+                    searchResult.size());
+        }
+        lastQuery = query;
+        lastQuerySite = site;
         searchResult = new ArrayList<>();
+        maxPagesForLemma = searchSetting.getMaxPagesForLemma();
 
         if (site.isEmpty()) {
             isLastSite = false;
@@ -52,14 +66,16 @@ public class SearchServiceImpl implements SearchService {
             searchInOneSite(query, site.getUrl(), offset, limit, isLastSite);
         }
         return new SearchResponse(searchResult
-                .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(limit)));
+                .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(offset, limit)),
+                searchResult.size());
     }
 
     private SearchResponse searchInOneSite(String query, String site, int offset, int limit, boolean isLastSite) {
         Set<String> lemmas = new HashSet<>();
 
         if (!query.isBlank()) {
-            lemmas = getLemmas(query);
+            lemmas = getLemmas(query.replaceAll("Ё", "Е")
+                    .replaceAll("ё", "е"));
         }
 
         lemmas = getLemmaCheckedForDuplicate(lemmas, query);
@@ -77,7 +93,8 @@ public class SearchServiceImpl implements SearchService {
         searchResult.sort(Comparator.comparingDouble(SearchItem::getRelevance).reversed());
 
         return new SearchResponse(searchResult
-                .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(limit)));
+                .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(offset, limit)),
+                searchResult.size());
     }
 
     private Set<String> getLemmas(String text) {
@@ -156,24 +173,27 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private Set<String> getLemmaCheckedForDuplicate(Set<String> lemmas, String query) {
+        if (lemmas.size() < 2) {
+            return lemmas;
+        }
         String[] queryWords = query.split("(?<=-|\\s)");
         Set<String> checkedLemmas = new HashSet<>();
         List<String> tempLemmas = lemmas.stream()
                 .sorted(Comparator.comparingInt(String::length))
                 .toList();
         for (String queryWord : queryWords) {
-            int lemmaCount = 0;
+            int charsCount = 0;
             boolean finded = false;
             while (true) {
                 for (String lemma : tempLemmas) {
-                    if (lemma.contains(queryWord.toLowerCase().substring(0, queryWord.length() - lemmaCount))) {
+                    if (lemma.contains(queryWord.toLowerCase().substring(0, queryWord.length() - charsCount))) {
                         checkedLemmas.add(lemma.toLowerCase());
                         finded = true;
                         break;
                     }
                 }
-                lemmaCount++;
-                if (lemmaCount == queryWord.length() || finded) {
+                charsCount++;
+                if (charsCount == queryWord.length() || finded) {
                     break;
                 }
             }
@@ -211,103 +231,95 @@ public class SearchServiceImpl implements SearchService {
     private String getSnippet(String pageText, Set<String> lemmas) {
         for (String lemma : lemmas) {
             pageText = getTextWithBoldedWords(lemma, pageText);
+            if (!pageText.contains("<b>")) {
+                pageText = getTextWithBoldedWords(lemma
+                        .replaceAll("ть|ся","")
+                        .substring(0, lemma
+                                .replaceAll("ть|ся","")
+                                .length() - 2), pageText);
+            }
         }
         return getSnippetFromBoldedText(pageText);
     }
     private String getTextWithBoldedWords(String lemma, String text) {
-        char bigFirstChar = lemma.toUpperCase().charAt(0);
-        char lowFirstChar = lemma.toLowerCase().charAt(0);
+        int lemmaLength = lemma.length();
+        lemma = lemma.replaceAll("ться", "");
+        String endingChars = "уеыаоэяийюёьъ";
+        endingChars += endingChars.toUpperCase();
+
+        while (endingChars.contains("" + lemma.charAt(lemma.length() - 1))) {
+            lemma = lemma.substring(0, lemma.length() - 1);
+        }
 
         text = text.replaceAll("Ё", "Е")
                 .replaceAll("ё", "е");
         lemma = lemma.replaceAll("Ё", "Е")
                 .replaceAll("ё", "е");
 
-        if (lemma.charAt(lemma.length() - 1) == 'ь') {
-            lemma = lemma.substring(0, lemma.length() - 1);
-        }
-        if (lemma.length() > 4) {
-            lemma = lemma.substring(0, lemma.length() - 1);
-        }
-        if (lemma.length() > 3) {
-            lemma = lemma.substring(0, lemma.length() - 1);
-        }
+        char bigFirstChar = lemma.toUpperCase().charAt(0);
+        char lowFirstChar = lemma.toLowerCase().charAt(0);
 
-        String bigFirstCharLemma = bigFirstChar + lemma.substring(1);
-        String lowFirstCharLemma = lowFirstChar + lemma.substring(1);
+        String lemmaPart = lemma.substring(1);
+        String PunctuationRegex = "-|\\s|\\.|\\!|\\:|\\;|\\?|\\'|\\," +
+                "|\\(|\\)|\\+|\\*|\\«|\\»|\"|\\[|\\]|\\{|\\}|\\„|\\“";
+        String bolderRegex = "(?<="+ PunctuationRegex +")" +
+                "(" + bigFirstChar + "|" + lowFirstChar + ")" +
+                lemmaPart + "[А-я]" +
+                "{0," + (lemmaLength + 3) + "}"; //+
 
-        String PunctuationRegex = "[\\.\\!\\:\\;\\?\\'" +
-                "\\,\\(\\)\\+\\*\\«\\»\"\\[\\]\\{\\}\\„\\“]";
-        String splitterRegex = "(?<=-|\\s|\\.|\\!|\\:|\\;|\\?|\\'|\\," +
-                "|\\(|\\)|\\+|\\*|\\«|\\»|\"|\\[|\\]|\\{|\\}|\\„|\\“)";
-        String[] splittedText = text.split(splitterRegex);
-        StringBuilder textWithBoldedWords = new StringBuilder();
-        String wordWithoutPunctuation;
-        String punctuation;
-        for (String word : splittedText) {
-            word = word.replace("\\","");
-            wordWithoutPunctuation = word.replaceAll(PunctuationRegex, "");
-            punctuation = word.replaceAll(wordWithoutPunctuation, "");
-            char firstWordChar = 0;
-            if (!word.isBlank()) {
-                firstWordChar = word.toLowerCase().charAt(0);
-            }
-            boolean isFirstCharMatched = firstWordChar == lowFirstChar;
-            boolean lengthMatched = wordWithoutPunctuation.length() <= lemma.length() + 4;
-            boolean lemmaMatched = wordWithoutPunctuation.contains(lowFirstCharLemma) ||
-                    wordWithoutPunctuation.contains(bigFirstCharLemma) ||
-                    wordWithoutPunctuation.contains(lemma.toUpperCase());
-
-            if (lemmaMatched && lengthMatched && isFirstCharMatched) {
-                word = "<b>" + wordWithoutPunctuation + "</b>" + punctuation;
-            }
-            textWithBoldedWords.append(" ").append(word);
-        }
-        return textWithBoldedWords.toString();
+        return text.replaceAll(bolderRegex, "<b>$0</b>");
     }
 
     private String getSnippetFromBoldedText(String pageText) {
         StringBuilder snippet;
         String firstWords;
+        pageText = pageText.replaceAll("-</b>\\s+<b>", "-")
+                .replaceAll("</b>\\s+<b>", " ")
+                .replaceAll("\\s+", " ");
         List<StringBuilder> snippets = new ArrayList<>();
-        int charsContAroundWord = 140;
-        int exponent = 26;
+        int maxSnippetSize = searchSetting.getMaxSnippetSize();
+        int minCharsCountAroundWord = searchSetting.getMinCharsCountAroundWord();
+        int charsCountAroundWord = 0;
+        int snippetsCount = 0;
+        int wordLength = 0;
+
         while (pageText.contains("<b>")) {
+            snippetsCount++;
+            wordLength += pageText.substring(pageText.indexOf("<b>")).length() -
+                    pageText.substring(pageText.indexOf("</b>")).length() + minCharsCountAroundWord * 2;
+
+            charsCountAroundWord = (maxSnippetSize - wordLength) / 2 / snippetsCount;
             snippet = new StringBuilder();
 
-            int startIndex = Math.max(pageText.indexOf("<b>") - 140, 0);
+            int startIndex = Math.max(pageText.indexOf("<b>") - maxSnippetSize / 2, 0);
             firstWords = pageText.substring(startIndex, pageText.indexOf("<b>"));
 
             pageText = pageText.substring(pageText.indexOf("<b>"));
 
-            int endIndex = Math.min(pageText.indexOf("</b>") + 140, pageText.length());
+            int endIndex = Math.min(pageText.indexOf("</b>") + maxSnippetSize / 2, pageText.length());
             snippet.append(firstWords).append(pageText, 0, endIndex);
             snippets.add(snippet);
 
             pageText = pageText.substring(pageText.indexOf("</b>") + 4);
-
-            if (charsContAroundWord > 6 && exponent > 0) {
-                exponent -= 2;
-                charsContAroundWord = charsContAroundWord - exponent - 4;
-            }
         }
-        charsContAroundWord = Math.max(charsContAroundWord, 3);
+
+        charsCountAroundWord = Math.max(charsCountAroundWord, minCharsCountAroundWord);
         StringBuilder finalSnippet = new StringBuilder();
+
         for (StringBuilder snip : snippets) {
             int startIndex = Math.max(snip.toString().indexOf("<b>") -
-                    charsContAroundWord, 0);
+                    charsCountAroundWord, 0);
             int endIndex = Math.min(snip.toString().indexOf("</b>") +
-                    charsContAroundWord + 4, snip.toString().length());
+                    charsCountAroundWord + 4, snip.toString().length());
 
             finalSnippet
                     .append("...")
-                    .append(snip,startIndex, endIndex)
+                    .append(snip, startIndex, endIndex)
                     .append("</b>")
                     .append("...")
                     .append(" ");
         }
-        return finalSnippet.substring(0, Math.min(finalSnippet.length(), 400))
-                .replaceAll("-</b>\\s+<b>", "-")
+        return finalSnippet.substring(0, Math.min(finalSnippet.length(), maxSnippetSize))
                 .replaceAll("<.?h.>","");
     }
     private double getAbsoluteRelevance(Page page, Set<String> lemmas) {
@@ -337,8 +349,8 @@ public class SearchServiceImpl implements SearchService {
         return sumRanks / maxRank;
     }
 
-    private int getMinLimit(int limit) {
-        return Math.min(searchResult.size(), limit);
+    private int getMinLimit(int offset, int limit) {
+        return Math.min(searchResult.size() - offset, limit);
     }
     private int getMinOffset(int offset) {
         return Math.min(searchResult.size(), offset);

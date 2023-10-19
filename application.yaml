@@ -36,3 +36,9 @@ parser-setting:
   random-delay-delta-before-connection: 2000
   min-delay-before-connection: 1000
   connection-timeout: 10000
+
+search-setting:
+  max-pages-for-lemma: 250
+  max-snippet-size: 280
+  min-chars-count-around-word: 10
+
