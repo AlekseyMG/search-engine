@@ -7,7 +7,6 @@ import searchengine.dto.statistics.DetailedStatisticsItem;
 import searchengine.dto.statistics.StatisticsData;
 import searchengine.api.response.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
-import searchengine.repository.IndexRepository;
 import searchengine.repository.LemmaRepository;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
@@ -25,8 +24,6 @@ public class StatisticsServiceImpl implements StatisticsService {
     private final SiteRepository siteRepository;
     @Autowired
     private final LemmaRepository lemmaRepository;
-//    @Autowired
-//    private final IndexRepository indexRepository;
 
     @Override
     public StatisticsResponse getStatistics() {
@@ -61,12 +58,4 @@ public class StatisticsServiceImpl implements StatisticsService {
         response.setResult(true);
         return response;
     }
-
-//    private int getLemmaCount (int siteId) {
-//        Float LemmaCount = indexRepository.getLemmaCountBySiteId(siteId);
-//        if (LemmaCount == null) {
-//            return 0;
-//        }
-//        return Math.round(LemmaCount);
-//    }
 }

@@ -39,10 +39,14 @@ public class WebParser extends RecursiveTask<String> {
 
     public WebParser(String absolutePath, Site currentSiteEntity, IndexingServiceImpl indexingServiceImpl) {
         this.absolutePath = absolutePath.replaceAll("www.", "");
-        this.relativePath = absolutePath.replaceAll("www.", "").replaceAll(
-                currentSiteEntity.getUrl().replaceAll("www.", ""), "")
-                .isEmpty() ? "/" : absolutePath.replaceAll(
-                        currentSiteEntity.getUrl().replaceAll("www.", ""), "");
+        this.relativePath = absolutePath
+                .replaceAll("www.", "")
+                .replaceAll(
+                        currentSiteEntity.getUrl().replaceAll("www.", ""), ""
+                ).isEmpty() ? "/" :
+                absolutePath.replaceAll(
+                        currentSiteEntity.getUrl().replaceAll("www.", ""), ""
+                );
         this.currentSiteEntity = currentSiteEntity;
         this.pageRepository = indexingServiceImpl.getPageRepository();
         this.siteRepository = indexingServiceImpl.getSiteRepository();
@@ -114,7 +118,8 @@ public class WebParser extends RecursiveTask<String> {
 
         } catch (SocketTimeoutException ex) {
             if (response != null) {
-                errorMessage = response.statusMessage().equals("OK") ? "" : response.statusMessage() + " ";
+                errorMessage = response.statusMessage().equals("OK") ?
+                        "" : response.statusMessage() + " ";
                 statusCode = response.statusCode();
             }
             if (ex.toString().contains("Connect timed out")) {
@@ -145,7 +150,8 @@ public class WebParser extends RecursiveTask<String> {
             System.out.println(errorMessage);
 
         } catch (DataIntegrityViolationException ex) {
-            errorMessage = ErrorMessages.ERROR_ADD_ENTITY_TO_DB + (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
+            errorMessage = ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
+                    (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
             System.out.println(errorMessage);
         }
         savePage(statusCode, htmlDoc.html(), relativePath);
@@ -169,7 +175,8 @@ public class WebParser extends RecursiveTask<String> {
         Elements htmlLinks = htmlDoc.select("a[href]");
 
         for (Element link : htmlLinks) {
-            parsedLinkAbsolutePath = link.attr("abs:href").replaceAll("www.","").toLowerCase();
+            parsedLinkAbsolutePath = link.attr("abs:href")
+                    .replaceAll("www.","").toLowerCase();
             parsedLinkRelativePath = parsedLinkAbsolutePath.replaceAll(siteUrl,"");
 
             if (parsedLinkAbsolutePath.contains(siteUrl) &&
@@ -209,7 +216,6 @@ public class WebParser extends RecursiveTask<String> {
             LemmaFinder lemmaFinder = new LemmaFinder(new RussianLuceneMorphology());
             lemmaFinder.collectLemmasFromHTML(content).forEach((normalWord, integer) -> {
                 Lemma lemma = lemmaRepository.findBySiteIdAndLemma(currentSiteEntity.getId(), normalWord);
-                //boolean isNewLemma = false;
                 if (lemma == null) {
                     lemma = new Lemma();
                     lemma.setFrequency(0);
