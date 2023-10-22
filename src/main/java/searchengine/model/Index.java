@@ -16,15 +16,11 @@ public class Index {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "page_id", referencedColumnName = "id", nullable = false)
-    //@Column(name = "page_id", nullable = false)
-    //private int pageId;
     private Page page;
 
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "lemma_id", referencedColumnName = "id", nullable = false)
-   // @Column(name = "lemma_id", nullable = false)
-   // private int lemmaId;
     private Lemma lemma;
 
     @Column(name = "`rank`", nullable = false)

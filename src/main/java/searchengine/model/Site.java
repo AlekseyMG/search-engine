@@ -2,10 +2,6 @@ package searchengine.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
 import java.time.LocalDateTime;
 @Data
 @Entity

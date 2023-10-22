@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Getter
 @RequiredArgsConstructor
 public class IndexingServiceImpl implements IndexingService {
-    public static final String[] SKIP_LIST = new String[]{"#", "@", ".com", ".pdf", ".php",
+    public static final String[] EXCEPTION_LINKS = new String[]{"#", "@", ".com", ".pdf", ".php",
                                 ".png", ".jpg", ".jpeg", ".gif", "upload", "img", "image"};
     private final SitesList settingSites;
     private final ParserSetting parserSetting;
@@ -52,7 +52,7 @@ public class IndexingServiceImpl implements IndexingService {
             pool.shutdown();
             threads.forEach(Thread::interrupt);
         } catch (Exception ex) {
-            System.out.println("Ошибка остановки: " + ex);
+            System.out.println(ErrorMessages.STOPPING_ERROR + ex);
         }
         batchIndexWriter.close();
 
@@ -67,27 +67,26 @@ public class IndexingServiceImpl implements IndexingService {
 //------------------------------------------------------------------// кнопку обратно и запустить индексацию.
         for (Thread thread : threads) {
             if (thread.isAlive()) {
-                return new ErrorResponse("Индексация уже запущена");
+                return new ErrorResponse(ErrorMessages.INDEXING_HAS_ALREADY_STARTED);
             }
         }
         isStoppedByUser = false;
-        clearDataByUrlList();             //ВКЛЮЧИТЬ!!!
-        indexingAllSitesFromConfig();     //ВКЛЮЧИТЬ!!!
+        clearDataByUrlList();
+        indexingAllSitesFromConfig();
 
         return new DefaultResponse();
     }
     @Override
     public DefaultResponse indexPage(String absolutePath) {
         if (isMatchedWithSkipList(absolutePath)) {
-            return new ErrorResponse("Адрес содержит недопустимые символы");
+            return new ErrorResponse(ErrorMessages.INVALID_CHARACTERS_IN_THE_ADDRESS);
         }
         List<Site> sites = siteRepository.findAll().stream().filter(site ->
                 absolutePath.replaceAll("www.","").contains(
                         site.getUrl().replaceAll("www.",""))).toList();
 
         if (sites.isEmpty()) {
-            return new ErrorResponse("Данная страница находится за пределами сайтов, " +
-                    "указанных в конфигурационном файле");
+            return new ErrorResponse(ErrorMessages.OUT_OF_SITE);
         }
 
         Site site = sites.get(0);
@@ -101,7 +100,7 @@ public class IndexingServiceImpl implements IndexingService {
 
         while (statusCode.get() == 0) {}
         if (statusCode.get() != 200) {
-            return new ErrorResponse("Страница недоступна");
+            return new ErrorResponse(ErrorMessages.PAGE_IS_NOT_AVAILABLE);
         }
         batchIndexWriter.close();
         return new DefaultResponse();
@@ -112,27 +111,31 @@ public class IndexingServiceImpl implements IndexingService {
             threads.forEach(Thread::interrupt);
             threads = new ArrayList<>();
         }
+        int parallelism = Math.max(1,
+                parserSetting.getCpuForPool() - settingSites.getSites().size());
         settingSites.getSites().forEach(settingSite -> {
             threads.add(
                 new Thread(()-> {
                     Site newSite = getNewSiteEntity(settingSite);
+
                     WebParser webParser = new WebParser(
                             settingSite.getUrl(),
                             newSite,
                             this);
+
                     try {
-                        pool = new ForkJoinPool(8);
+                        pool = new ForkJoinPool(parallelism);
                         pool.invoke(webParser);
                     } catch (NullPointerException ex) {
-                        newSite.setLastError(ErrorMessages.ioOrNotFound);
+                        newSite.setLastError(ErrorMessages.IO_OR_NOT_FOUND);
                         System.out.println("+++++ " + ex + " ++++++");
                         newSite.setStatus(StatusType.FAILED);
                     } catch (DataIntegrityViolationException ex) {
-                        newSite.setLastError(ErrorMessages.errorAddEntityToDB +
+                        newSite.setLastError(ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
                                 (ex.toString().contains("Duplicate") ?
                                 " (дубликат)" : ""));
                     } catch (Exception ex) {
-                        newSite.setLastError(ErrorMessages.unknownIndexingError + ex);
+                        newSite.setLastError(ErrorMessages.UNKNOWN_INDEXING_ERROR + ex);
                         System.out.println("+++++ " + ex + " ++++++");
                         ex.printStackTrace();
                         newSite.setStatus(StatusType.FAILED);
@@ -152,27 +155,20 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void clearDataByUrlList() {
-       // indexRepository.deleteAll();
+        List<Site> repositorySites = siteRepository.findAll();
         settingSites.getSites()
                 .stream()
                 .map(searchengine.config.Site::getUrl)
                 .forEach(url -> {
                     String shortUrl = url.replaceAll("https://", "")
                                          .replaceAll("www.", "");
-                    siteRepository.findAll().forEach(site -> {
-                        if (site.getUrl().contains(shortUrl)) {
-                            System.out.println("Удаляем все для сайта №" + site.getId() + " " + site.getName());
-                            System.out.println("Удаляем из таблицы index");
-                            pageRepository.findPagesBySiteId(site.getId())
-                                    .forEach(page -> indexRepository.deleteByPageId(page.getId()));
-                            System.out.println("Удаляем из таблицы lemma");
-                            lemmaRepository.deleteBySiteId(site.getId());
-                            System.out.println("Удаляем из таблицы page");
-                            pageRepository.deleteBySiteId(site.getId());
-                            System.out.println("Удаляем из таблицы site");
-                            siteRepository.deleteBySiteId(site.getId());
+
+                    repositorySites.forEach(repositorySite -> {
+                        if (repositorySite.getUrl().contains(shortUrl)) {
+                            deleteSiteInfo(repositorySite);
                         }
                     });
+
                 });
         pageRepository.resetIdCounter();
         siteRepository.resetIdCounter();
@@ -199,8 +195,27 @@ public class IndexingServiceImpl implements IndexingService {
 
         return newSite;
     }
+
+    private void deleteSiteInfo(Site site) {
+        System.out.println("Удаляем все для сайта №" + site.getId() +
+                " " + site.getName());
+
+        System.out.println("Удаляем из таблицы index");
+        pageRepository.findPagesBySiteId(site.getId())
+                .forEach(page -> indexRepository.deleteByPageId(page.getId()));
+
+        System.out.println("Удаляем из таблицы lemma");
+        lemmaRepository.deleteBySiteId(site.getId());
+
+        System.out.println("Удаляем из таблицы page");
+        pageRepository.deleteBySiteId(site.getId());
+
+        System.out.println("Удаляем из таблицы site");
+        siteRepository.deleteBySiteId(site.getId());
+    }
+
     public boolean isMatchedWithSkipList(String linkAbsolutePath) {
-        for (String skipString : SKIP_LIST) {
+        for (String skipString : EXCEPTION_LINKS) {
             if (linkAbsolutePath.contains(skipString)) {
                 return true;
             }

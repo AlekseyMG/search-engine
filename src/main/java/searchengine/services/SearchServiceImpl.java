@@ -60,7 +60,7 @@ public class SearchServiceImpl implements SearchService {
     private SearchResponse searchInAllSites(String query, int offset, int limit, boolean isLastSite) {
         List<Site> siteList = siteRepository.findAll();
         for (Site site : siteList) {
-            if (site.equals(siteList.get(siteList.size() - 1))){
+            if (site.equals(siteList.get(siteList.size() - 1))) {
                 isLastSite = true;
             }
             searchInOneSite(query, site.getUrl(), offset, limit, isLastSite);
@@ -85,7 +85,7 @@ public class SearchServiceImpl implements SearchService {
         Set<Page> pages = getPagesByLemmasAndSiteId(lemmas, siteEntity.getId());
 
         for (Page page : pages) {
-            getDataFromPage(page, siteEntity, lemmas);
+            setDataToSearchResultFromPage(page, siteEntity, lemmas);
         }
         if (isLastSite) {
             setRelativeRelevance();
@@ -201,7 +201,7 @@ public class SearchServiceImpl implements SearchService {
         return checkedLemmas;
     }
 
-    private void getDataFromPage(Page page, Site site, Set<String> lemmas) {
+    private void setDataToSearchResultFromPage(Page page, Site site, Set<String> lemmas) {
         String title = Jsoup.parse(page.getContent()).title();
         String pageText = Jsoup.parse(page.getContent()).text();
         searchResult.add(
@@ -264,19 +264,16 @@ public class SearchServiceImpl implements SearchService {
                 "|\\(|\\)|\\+|\\*|\\«|\\»|\"|\\[|\\]|\\{|\\}|\\„|\\“";
         String bolderRegex = "(?<="+ PunctuationRegex +")" +
                 "(" + bigFirstChar + "|" + lowFirstChar + ")" +
-                lemmaPart + "[А-я]" +
-                "{0," + (lemmaLength + 3) + "}"; //+
+                lemmaPart + "[А-я]{0," + (lemmaLength + 3) + "}";
 
         return text.replaceAll(bolderRegex, "<b>$0</b>");
     }
 
     private String getSnippetFromBoldedText(String pageText) {
-        StringBuilder snippet;
-        String firstWords;
         pageText = pageText.replaceAll("-</b>\\s+<b>", "-")
                 .replaceAll("</b>\\s+<b>", " ")
                 .replaceAll("\\s+", " ");
-        List<StringBuilder> snippets = new ArrayList<>();
+        List<String> snippets = new ArrayList<>();
         int maxSnippetSize = searchSetting.getMaxSnippetSize();
         int minCharsCountAroundWord = searchSetting.getMinCharsCountAroundWord();
         int charsCountAroundWord = 0;
@@ -287,31 +284,25 @@ public class SearchServiceImpl implements SearchService {
             snippetsCount++;
             wordLength += pageText.substring(pageText.indexOf("<b>")).length() -
                     pageText.substring(pageText.indexOf("</b>")).length() + minCharsCountAroundWord * 2;
-
             charsCountAroundWord = (maxSnippetSize - wordLength) / 2 / snippetsCount;
-            snippet = new StringBuilder();
-
             int startIndex = Math.max(pageText.indexOf("<b>") - maxSnippetSize / 2, 0);
-            firstWords = pageText.substring(startIndex, pageText.indexOf("<b>"));
-
-            pageText = pageText.substring(pageText.indexOf("<b>"));
-
             int endIndex = Math.min(pageText.indexOf("</b>") + maxSnippetSize / 2, pageText.length());
-            snippet.append(firstWords).append(pageText, 0, endIndex);
-            snippets.add(snippet);
-
+            snippets.add(pageText.substring(startIndex, endIndex));
             pageText = pageText.substring(pageText.indexOf("</b>") + 4);
         }
-
         charsCountAroundWord = Math.max(charsCountAroundWord, minCharsCountAroundWord);
+
+        return trimSnippet(snippets, charsCountAroundWord, maxSnippetSize);
+    }
+
+    private String trimSnippet(List<String> snippets, int charsCountAroundWord, int maxSnippetSize) {
         StringBuilder finalSnippet = new StringBuilder();
 
-        for (StringBuilder snip : snippets) {
-            int startIndex = Math.max(snip.toString().indexOf("<b>") -
+        for (String snip : snippets) {
+            int startIndex = Math.max(snip.indexOf("<b>") -
                     charsCountAroundWord, 0);
-            int endIndex = Math.min(snip.toString().indexOf("</b>") +
-                    charsCountAroundWord + 4, snip.toString().length());
-
+            int endIndex = Math.min(snip.indexOf("</b>") +
+                    charsCountAroundWord + 4, snip.length());
             finalSnippet
                     .append("...")
                     .append(snip, startIndex, endIndex)
@@ -322,6 +313,7 @@ public class SearchServiceImpl implements SearchService {
         return finalSnippet.substring(0, Math.min(finalSnippet.length(), maxSnippetSize))
                 .replaceAll("<.?h.>","");
     }
+
     private double getAbsoluteRelevance(Page page, Set<String> lemmas) {
         Set<Index> indices = new HashSet<>();
         List<Double> ranks = new ArrayList<>();

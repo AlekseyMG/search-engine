@@ -18,4 +18,5 @@ public class ParserSetting {
     private int connectionTimeout;
     @Value("${spring.jpa.properties.hibernate.jdbc.batch_size}")
     private int batchSize;
+    private int cpuForPool;
 }

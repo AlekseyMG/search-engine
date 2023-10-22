@@ -124,7 +124,7 @@ public class WebParser extends RecursiveTask<String> {
                 statusCode = 598;
             }
 
-            errorMessage =  ErrorMessages.connectTimedOut + absolutePath;
+            errorMessage =  ErrorMessages.CONNECTION_TIMED_OUT + absolutePath;
 
             if (absolutePath.equals(siteUrl)) {
                 currentSiteEntity.setStatus(StatusType.FAILED);
@@ -133,11 +133,11 @@ public class WebParser extends RecursiveTask<String> {
             System.out.println(errorMessage);
 
         } catch (InterruptedException ex) {
-            errorMessage = ErrorMessages.abortedByUser;
+            errorMessage = ErrorMessages.ABORTED_BY_USER;
             System.out.println(errorMessage);
 
         } catch (IOException ex) {
-            errorMessage = ErrorMessages.ioOrNotFound + absolutePath;
+            errorMessage = ErrorMessages.IO_OR_NOT_FOUND + absolutePath;
 
             if (absolutePath.equals(siteUrl)) {
                 currentSiteEntity.setStatus(StatusType.FAILED);
@@ -145,7 +145,7 @@ public class WebParser extends RecursiveTask<String> {
             System.out.println(errorMessage);
 
         } catch (DataIntegrityViolationException ex) {
-            errorMessage = ErrorMessages.errorAddEntityToDB + (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
+            errorMessage = ErrorMessages.ERROR_ADD_ENTITY_TO_DB + (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
             System.out.println(errorMessage);
         }
         savePage(statusCode, htmlDoc.html(), relativePath);
