@@ -39,7 +39,7 @@ parser-setting:
   cpu-for-pool: 10 # number of processors to use by the ForkJoinPool
 
 search-setting:
-  max-pages-for-lemma: 250 # pages (The search is carried out in pages where the lemma occurs no more often than this number)
+  max-pages-for-lemma: 2500 # pages (The search is carried out in pages where the lemma occurs no more often than this number)
   max-snippet-size: 280 # characters
   min-chars-count-around-word: 10 # characters (Minimum number of characters around the bolded word in snippet)
 

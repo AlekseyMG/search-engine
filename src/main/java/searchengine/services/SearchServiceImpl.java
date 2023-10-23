@@ -82,7 +82,7 @@ public class SearchServiceImpl implements SearchService {
         Site siteEntity = siteRepository
                 .findByUrl(site.replaceAll("https?://","")
                 .replaceAll("www.",""));
-        Set<Page> pages = getPagesByLemmasAndSiteId(lemmas, siteEntity.getId());
+        List<Page> pages = getPagesByLemmasAndSiteId(lemmas, siteEntity.getId());
 
         for (Page page : pages) {
             setDataToSearchResultFromPage(page, siteEntity, lemmas);
@@ -107,20 +107,20 @@ public class SearchServiceImpl implements SearchService {
         return new HashSet<>();
     }
 
-    private Set<Page> getPagesByLemmasAndSiteId(Set<String> lemmas, int siteId) {
+    private List<Page> getPagesByLemmasAndSiteId(Set<String> lemmas, int siteId) {
         TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(lemmas, siteId);
-        Set<Integer> firstPagesIdsByLemmaFromIndex = new HashSet<>();
+        Set<Integer> pagesIdsByFirstLemmaFromIndex = new HashSet<>();
 
         if (!lemmaEntities.isEmpty()) {
-            firstPagesIdsByLemmaFromIndex = indexRepository
+            pagesIdsByFirstLemmaFromIndex = indexRepository
                     .findPagesIdsByLemmaId(lemmaEntities.first().getId());
         }
         if (lemmas.size() == 1) {
-            return firstPagesIdsByLemmaFromIndex.size() <= maxPagesForLemma ?
-                    Set.copyOf(pageRepository.findAllById(firstPagesIdsByLemmaFromIndex)) :
-                    new HashSet<>();
+            return pagesIdsByFirstLemmaFromIndex.size() <= maxPagesForLemma ?
+                    pageRepository.findAllById(pagesIdsByFirstLemmaFromIndex) :
+                    new ArrayList<>();
         }
-        return getMatchedPages(lemmaEntities, firstPagesIdsByLemmaFromIndex);
+        return getMatchedPages(lemmaEntities, pagesIdsByFirstLemmaFromIndex);
     }
     private TreeSet<Lemma> getLemmaEntitiesByWordsAndSiteId(Set<String> lemmas, int siteId) {
         TreeSet<Lemma> lemmaEntities = new TreeSet<>(Comparator.comparingDouble(Lemma::getFrequency));
@@ -135,41 +135,24 @@ public class SearchServiceImpl implements SearchService {
         return lemmaEntities;
     }
 
-    private Set<Page> getMatchedPages(
-            TreeSet<Lemma> lemmaEntities,
-            Set<Integer> firstPagesIdsByLemmaFromIndex
-    ) {
-        Set<Page> matchedPages = new HashSet<>();
-        Set<Page> pagesByLemmaFromIndex = new HashSet<>();
-        Set<Integer> nextPagesIdsByLemmaFromIndex = new HashSet<>();
+    private List<Page> getMatchedPages(TreeSet<Lemma> lemmaEntities, Set<Integer> firstMatchedPageIds) {
+        lemmaEntities.remove(lemmaEntities.first());
+        Set<Integer> matchedPageIds = new HashSet<>();
+        Set<Integer> pageIds;
 
         for (Lemma lemmaEntity : lemmaEntities) {
-
-            if (!lemmaEntity.equals(lemmaEntities.first())) {
-                nextPagesIdsByLemmaFromIndex = indexRepository
-                        .findPagesIdsByLemmaId(lemmaEntity.getId());
-            }
-            if (firstPagesIdsByLemmaFromIndex.size() < maxPagesForLemma) {
-                pagesByLemmaFromIndex.addAll(pageRepository
-                        .findAllById(firstPagesIdsByLemmaFromIndex));
-            }
-
-            for (int pageIdByLemmaFromIndex : firstPagesIdsByLemmaFromIndex) {
-
-                if (nextPagesIdsByLemmaFromIndex.stream()
-                        .anyMatch(pageId -> pageId == pageIdByLemmaFromIndex)) {
-                    matchedPages.addAll(pagesByLemmaFromIndex.stream()
-                            .filter(page -> page.getId() == pageIdByLemmaFromIndex)
-                            .toList()
-                    );
-                    firstPagesIdsByLemmaFromIndex = Set.copyOf(matchedPages.stream()
-                            .map(Page::getId)
-                            .toList()
-                    );
+            matchedPageIds = new HashSet<>();
+            pageIds = indexRepository.findPagesIdsByLemmaId(lemmaEntity.getId());
+            if (pageIds.size() < maxPagesForLemma) {
+                for (int id : pageIds) {
+                    if (firstMatchedPageIds.stream().anyMatch(pageId -> pageId == id)) {
+                        matchedPageIds.add(id);
+                    }
                 }
             }
+            firstMatchedPageIds = matchedPageIds;
         }
-        return matchedPages;
+        return pageRepository.findAllById(matchedPageIds);
     }
 
     private Set<String> getLemmaCheckedForDuplicate(Set<String> lemmas, String query) {

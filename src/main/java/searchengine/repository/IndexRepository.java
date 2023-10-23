@@ -11,7 +11,7 @@ import java.util.HashSet;
 
 @Repository
 public interface IndexRepository extends JpaRepository<Index, Integer> {
-    @Query(value = "SELECT * FROM `index` WHERE page_id=?1 AND lemma_id=?2", nativeQuery = true)
+    @Query(value = "SELECT * FROM `index` WHERE page_id=?1 AND lemma_id=?2 limit 1", nativeQuery = true)
     public Index findByPageIdAndLemmaId(int pageId, int lemmaId);
 
     @Query(value = "SELECT * FROM `index` WHERE page_id=?1", nativeQuery = true)
