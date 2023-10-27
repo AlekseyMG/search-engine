@@ -6,7 +6,6 @@ import org.jsoup.Jsoup;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import searchengine.api.response.SearchResponse;
-import searchengine.config.ParserSetting;
 import searchengine.config.SearchSetting;
 import searchengine.dto.SearchItem;
 import searchengine.model.Index;
@@ -26,7 +25,6 @@ public class SearchServiceImpl implements SearchService {
     private String lastQuery;
     private String lastQuerySite;
     private final SearchSetting searchSetting;
-    private final ParserSetting parserSetting;
     @Autowired
     private final SiteRepository siteRepository;
     @Autowired
@@ -35,7 +33,7 @@ public class SearchServiceImpl implements SearchService {
     private final LemmaRepository lemmaRepository;
     @Autowired
     private final IndexRepository indexRepository;
-    private int maxPagesForLemma;
+    private int pagesPercentForLemma;
     private boolean isLastSite = false;
     @Override
     public SearchResponse search(String query, String site, int offset, int limit) {
@@ -47,7 +45,7 @@ public class SearchServiceImpl implements SearchService {
         lastQuery = query;
         lastQuerySite = site;
         searchResult = new ArrayList<>();
-        maxPagesForLemma = searchSetting.getMaxPagesForLemma();
+        pagesPercentForLemma = searchSetting.getPagesPercentForLemma();
 
         if (site.isEmpty()) {
             isLastSite = false;
@@ -82,10 +80,13 @@ public class SearchServiceImpl implements SearchService {
         Site siteEntity = siteRepository
                 .findByUrl(site.replaceAll("https?://","")
                 .replaceAll("www.",""));
-        List<Page> pages = getPagesByLemmasAndSiteId(lemmas, siteEntity.getId());
+
+        double pagesCount = pageRepository.getPagesCountBySiteId(siteEntity.getId());
+        TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(lemmas, siteEntity.getId(), pagesCount);
+        List<Page> pages = getPagesByLemmas(lemmaEntities, pagesCount);
 
         for (Page page : pages) {
-            setDataToSearchResultFromPage(page, siteEntity, lemmas);
+            setDataToSearchResultFromPage(page, siteEntity, lemmaEntities);
         }
         if (isLastSite) {
             setRelativeRelevance();
@@ -107,51 +108,62 @@ public class SearchServiceImpl implements SearchService {
         return new HashSet<>();
     }
 
-    private List<Page> getPagesByLemmasAndSiteId(Set<String> lemmas, int siteId) {
-        TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(lemmas, siteId);
+    private List<Page> getPagesByLemmas(TreeSet<Lemma> lemmaEntities, double pagesCount) {
         Set<Integer> pagesIdsByFirstLemmaFromIndex = new HashSet<>();
 
         if (!lemmaEntities.isEmpty()) {
             pagesIdsByFirstLemmaFromIndex = indexRepository
                     .findPagesIdsByLemmaId(lemmaEntities.first().getId());
         }
-        if (lemmas.size() == 1) {
-            return pagesIdsByFirstLemmaFromIndex.size() <= maxPagesForLemma ?
+        if (lemmaEntities.size() == 1) {
+            return pagesIdsByFirstLemmaFromIndex.size() <= pagesCount / 100 * pagesPercentForLemma ?
                     pageRepository.findAllById(pagesIdsByFirstLemmaFromIndex) :
                     new ArrayList<>();
         }
         return getMatchedPages(lemmaEntities, pagesIdsByFirstLemmaFromIndex);
     }
-    private TreeSet<Lemma> getLemmaEntitiesByWordsAndSiteId(Set<String> lemmas, int siteId) {
-        TreeSet<Lemma> lemmaEntities = new TreeSet<>(Comparator.comparingDouble(Lemma::getFrequency));
+    private TreeSet<Lemma> getLemmaEntitiesByWordsAndSiteId(Set<String> lemmas, int siteId, double pagesCount) {
+        TreeSet<Lemma> lemmaEntities = new TreeSet<>(
+                Comparator.comparingDouble(Lemma::getFrequency).thenComparing(Lemma::getLemma)
+        );
 
         lemmas.forEach(lemma -> {
             Lemma lemmaEntity = lemmaRepository.findBySiteIdAndLemma(siteId, lemma);
             if (lemmaEntity == null) {
                 lemmaEntity = new Lemma();
+                lemmaEntity.setLemma("");
             }
-            lemmaEntities.add(lemmaEntity);
+                lemmaEntities.add(lemmaEntity);
         });
-        return lemmaEntities;
+        if (lemmaEntities.first().getFrequency() <= pagesCount / 100 * pagesPercentForLemma) {
+            return lemmaEntities;
+        }
+        return new TreeSet<>(
+                Comparator.comparingDouble(Lemma::getFrequency).thenComparing(Lemma::getLemma)
+        );
     }
 
     private List<Page> getMatchedPages(TreeSet<Lemma> lemmaEntities, Set<Integer> firstMatchedPageIds) {
-        lemmaEntities.remove(lemmaEntities.first());
+        Lemma firstLemmaEntity = new Lemma();
+        firstLemmaEntity.setLemma("");
+        if (!lemmaEntities.isEmpty()) {
+            firstLemmaEntity = lemmaEntities.first();
+            lemmaEntities.remove(firstLemmaEntity);
+        }
         Set<Integer> matchedPageIds = new HashSet<>();
         Set<Integer> pageIds;
 
         for (Lemma lemmaEntity : lemmaEntities) {
             matchedPageIds = new HashSet<>();
             pageIds = indexRepository.findPagesIdsByLemmaId(lemmaEntity.getId());
-            if (pageIds.size() < maxPagesForLemma) {
                 for (int id : pageIds) {
                     if (firstMatchedPageIds.stream().anyMatch(pageId -> pageId == id)) {
                         matchedPageIds.add(id);
                     }
                 }
-            }
             firstMatchedPageIds = matchedPageIds;
         }
+        lemmaEntities.add(firstLemmaEntity);
         return pageRepository.findAllById(matchedPageIds);
     }
 
@@ -184,7 +196,7 @@ public class SearchServiceImpl implements SearchService {
         return checkedLemmas;
     }
 
-    private void setDataToSearchResultFromPage(Page page, Site site, Set<String> lemmas) {
+    private void setDataToSearchResultFromPage(Page page, Site site, TreeSet<Lemma> lemmaEntities) {
         String title = Jsoup.parse(page.getContent()).title();
         String pageText = Jsoup.parse(page.getContent()).text();
         searchResult.add(
@@ -193,8 +205,8 @@ public class SearchServiceImpl implements SearchService {
                         site.getName(),
                         page.getPath(),
                         title,
-                        getSnippet(pageText, lemmas),
-                        getAbsoluteRelevance(page, lemmas)
+                        getSnippet(pageText, lemmaEntities),
+                        getAbsoluteRelevance(page, lemmaEntities)
                 )
         );
     }
@@ -211,7 +223,8 @@ public class SearchServiceImpl implements SearchService {
         }
     }
 
-    private String getSnippet(String pageText, Set<String> lemmas) {
+    private String getSnippet(String pageText, TreeSet<Lemma> lemmaEntities) {
+        List<String> lemmas = lemmaEntities.stream().map(Lemma::getLemma).toList();
         for (String lemma : lemmas) {
             pageText = getTextWithBoldedWords(lemma, pageText);
             if (!pageText.contains("<b>")) {
@@ -230,8 +243,10 @@ public class SearchServiceImpl implements SearchService {
         String endingChars = "уеыаоэяийюёьъ";
         endingChars += endingChars.toUpperCase();
 
-        while (endingChars.contains("" + lemma.charAt(lemma.length() - 1))) {
-            lemma = lemma.substring(0, lemma.length() - 1);
+        if (lemmaLength > 3) {
+            while (endingChars.contains("" + lemma.charAt(lemma.length() - 1))) {
+                lemma = lemma.substring(0, lemma.length() - 1);
+            }
         }
 
         text = text.replaceAll("Ё", "Е")
@@ -297,13 +312,10 @@ public class SearchServiceImpl implements SearchService {
                 .replaceAll("<.?h.>","");
     }
 
-    private double getAbsoluteRelevance(Page page, Set<String> lemmas) {
+    private double getAbsoluteRelevance(Page page, TreeSet<Lemma> lemmaEntities) {
         Set<Index> indices = new HashSet<>();
         List<Double> ranks = new ArrayList<>();
         double maxRank = 0;
-        TreeSet<Lemma> lemmaEntities = getLemmaEntitiesByWordsAndSiteId(
-                lemmas, page.getSite().getId()
-        );
 
         lemmaEntities.forEach(lemma -> indices.add(indexRepository
                 .findByPageIdAndLemmaId(page.getId(), lemma.getId())));

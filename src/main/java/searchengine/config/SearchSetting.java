@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "search-setting")
 public class SearchSetting {
-    private int maxPagesForLemma;
+    private int pagesPercentForLemma;
     private int maxSnippetSize;
     private int minCharsCountAroundWord;
 }
