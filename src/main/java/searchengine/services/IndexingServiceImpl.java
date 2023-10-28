@@ -60,11 +60,11 @@ public class IndexingServiceImpl implements IndexingService {
     }
     @Override
     public DefaultResponse startIndexing() {
-////------------------------------------------------------------------// Отключена кнопка Start Indexing,
-//        if (isStoppedByUser) {                                      // чтобы всякие хулиганы не запускали
-//            return new ErrorResponse("Не трогай эту кнопку!"); //  долгую полную индексацию.
-//        }                                                           // Закоментируйте этот код, чтобы включить
-////------------------------------------------------------------------// кнопку обратно и запустить индексацию.
+//------------------------------------------------------------------// Отключена кнопка Start Indexing,
+        if (isStoppedByUser) {                                      // чтобы всякие хулиганы не запускали
+            return new ErrorResponse("Не трогай эту кнопку!"); //  долгую полную индексацию.
+        }                                                           // Закоментируйте этот код, чтобы включить
+//------------------------------------------------------------------// кнопку обратно и запустить индексацию.
         for (Thread thread : threads) {
             if (thread.isAlive()) {
                 return new ErrorResponse(ErrorMessages.INDEXING_HAS_ALREADY_STARTED);
@@ -111,9 +111,8 @@ public class IndexingServiceImpl implements IndexingService {
             threads.forEach(Thread::interrupt);
             threads = new ArrayList<>();
         }
-        settingSites.getSites().forEach(settingSite -> {
-            threads.add(
-                new Thread(()-> {
+        settingSites.getSites().forEach(settingSite ->
+            threads.add(new Thread(()-> {
                     Site newSite = getNewSiteEntity(settingSite);
 
                     WebParser webParser = new WebParser(
@@ -122,8 +121,8 @@ public class IndexingServiceImpl implements IndexingService {
                             this);
                     runPool(webParser, newSite);
                 })
-            );
-        });
+            )
+        );
         threads.forEach(Thread::start);
     }
 

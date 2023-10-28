@@ -6,9 +6,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.dao.DataIntegrityViolationException;
 import searchengine.config.ParserSetting;
-import searchengine.dto.ErrorMessages;
 import searchengine.model.*;
 import searchengine.model.Index;
 import searchengine.repository.IndexRepository;
@@ -17,7 +15,6 @@ import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 
 import java.io.IOException;
-import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.RecursiveTask;
@@ -93,8 +90,6 @@ public class WebParser extends RecursiveTask<String> {
 
     private Set<String> saveCurrentPageAndGetLinks() {
         Set<String> links = new HashSet<>();
-        //Connection.Response response = null;
-        //String errorMessage = "";
         Document htmlDoc = new Document("");
 
         if (absolutePath.contains(".pdf") || absolutePath.contains("#")) {
@@ -123,44 +118,6 @@ public class WebParser extends RecursiveTask<String> {
             errorHandler.processError(ex, this);
         }
 
-//        catch (SocketTimeoutException ex) {
-//            if (response != null) {
-//                errorMessage = response.statusMessage().equals("OK") ?
-//                        "" : response.statusMessage() + " ";
-//                statusCode = response.statusCode();
-//            }
-//            if (ex.toString().contains("Connect timed out")) {
-//                statusCode = 522;
-//            }
-//            if (ex.toString().contains("Read timed out")) {
-//                statusCode = 598;
-//            }
-//
-//            errorMessage =  ErrorMessages.CONNECTION_TIMED_OUT + absolutePath;
-//
-//            if (absolutePath.equals(siteUrl)) {
-//                currentSiteEntity.setStatus(StatusType.FAILED);
-//            }
-//
-//            System.out.println(errorMessage);
-//
-//        } catch (InterruptedException ex) {
-//            errorMessage = ErrorMessages.ABORTED_BY_USER;
-//            System.out.println(errorMessage);
-//
-//        } catch (IOException ex) {
-//            errorMessage = ErrorMessages.IO_OR_NOT_FOUND + absolutePath;
-//
-//            if (absolutePath.equals(siteUrl)) {
-//                currentSiteEntity.setStatus(StatusType.FAILED);
-//            }
-//            System.out.println(errorMessage);
-//
-//        } catch (DataIntegrityViolationException ex) {
-//            errorMessage = ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
-//                    (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
-//            System.out.println(errorMessage);
-//        }
         savePage(statusCode, htmlDoc.html(), relativePath);
         updateSiteStatus(errorMessage);
 
@@ -195,7 +152,6 @@ public class WebParser extends RecursiveTask<String> {
                     links.add(parsedLinkAbsolutePath);
                 }
             }
-
         }
         return links;
     }

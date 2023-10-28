@@ -8,13 +8,13 @@ import searchengine.model.StatusType;
 public class ErrorHandler {
     public void processError(Exception ex, WebParser webParser) {
         if (ex.toString().contains("UnknownHostException") || ex.toString().contains("IOException")) {
-            IOException(ex, webParser);
+            IOException(webParser);
         }
         if (ex.toString().contains("SocketTimeout")) {
             SocketTimeout(ex, webParser);
         }
         if (ex.toString().contains("Interrupted")) {
-            Interrupted(ex, webParser);
+            Interrupted(webParser);
         }
         if (ex.toString().contains("DataIntegrityViolation")) {
             DataIntegrityViolation(ex, webParser);
@@ -41,13 +41,13 @@ public class ErrorHandler {
         }
         System.out.println(errorMessage);
     }
-    private void Interrupted(Exception ex, WebParser webParser) {
+    private void Interrupted(WebParser webParser) {
         String errorMessage = ErrorMessages.ABORTED_BY_USER;
         webParser.setErrorMessage(errorMessage);
         System.out.println(errorMessage);
     }
 
-    private void IOException(Exception ex, WebParser webParser) {
+    private void IOException(WebParser webParser) {
         String errorMessage = ErrorMessages.IO_OR_NOT_FOUND + webParser.getAbsolutePath();
         webParser.setErrorMessage(errorMessage);
         if (webParser.getAbsolutePath().equals(webParser.getSiteUrl())) {
