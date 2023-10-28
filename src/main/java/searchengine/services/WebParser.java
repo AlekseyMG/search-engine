@@ -35,7 +35,10 @@ public class WebParser extends RecursiveTask<String> {
     private final IndexingServiceImpl indexingServiceImpl;
     private final int siteId;
     List<WebParser> subTasks = new LinkedList<>();
-    int statusCode = 0;
+    ErrorHandler errorHandler = new ErrorHandler();
+    private int statusCode = 0;
+    private String errorMessage = "";
+    private Connection.Response response = null;
 
     public WebParser(String absolutePath, Site currentSiteEntity, IndexingServiceImpl indexingServiceImpl) {
         this.absolutePath = absolutePath.replaceAll("www.", "");
@@ -90,8 +93,8 @@ public class WebParser extends RecursiveTask<String> {
 
     private Set<String> saveCurrentPageAndGetLinks() {
         Set<String> links = new HashSet<>();
-        Connection.Response response = null;
-        String errorMessage = "";
+        //Connection.Response response = null;
+        //String errorMessage = "";
         Document htmlDoc = new Document("");
 
         if (absolutePath.contains(".pdf") || absolutePath.contains("#")) {
@@ -116,44 +119,48 @@ public class WebParser extends RecursiveTask<String> {
             statusCode = response.statusCode();
             links = getLinksFromHTML(htmlDoc);
 
-        } catch (SocketTimeoutException ex) {
-            if (response != null) {
-                errorMessage = response.statusMessage().equals("OK") ?
-                        "" : response.statusMessage() + " ";
-                statusCode = response.statusCode();
-            }
-            if (ex.toString().contains("Connect timed out")) {
-                statusCode = 522;
-            }
-            if (ex.toString().contains("Read timed out")) {
-                statusCode = 598;
-            }
-
-            errorMessage =  ErrorMessages.CONNECTION_TIMED_OUT + absolutePath;
-
-            if (absolutePath.equals(siteUrl)) {
-                currentSiteEntity.setStatus(StatusType.FAILED);
-            }
-
-            System.out.println(errorMessage);
-
-        } catch (InterruptedException ex) {
-            errorMessage = ErrorMessages.ABORTED_BY_USER;
-            System.out.println(errorMessage);
-
-        } catch (IOException ex) {
-            errorMessage = ErrorMessages.IO_OR_NOT_FOUND + absolutePath;
-
-            if (absolutePath.equals(siteUrl)) {
-                currentSiteEntity.setStatus(StatusType.FAILED);
-            }
-            System.out.println(errorMessage);
-
-        } catch (DataIntegrityViolationException ex) {
-            errorMessage = ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
-                    (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
-            System.out.println(errorMessage);
+        } catch (Exception ex) {
+            errorHandler.processError(ex, this);
         }
+
+//        catch (SocketTimeoutException ex) {
+//            if (response != null) {
+//                errorMessage = response.statusMessage().equals("OK") ?
+//                        "" : response.statusMessage() + " ";
+//                statusCode = response.statusCode();
+//            }
+//            if (ex.toString().contains("Connect timed out")) {
+//                statusCode = 522;
+//            }
+//            if (ex.toString().contains("Read timed out")) {
+//                statusCode = 598;
+//            }
+//
+//            errorMessage =  ErrorMessages.CONNECTION_TIMED_OUT + absolutePath;
+//
+//            if (absolutePath.equals(siteUrl)) {
+//                currentSiteEntity.setStatus(StatusType.FAILED);
+//            }
+//
+//            System.out.println(errorMessage);
+//
+//        } catch (InterruptedException ex) {
+//            errorMessage = ErrorMessages.ABORTED_BY_USER;
+//            System.out.println(errorMessage);
+//
+//        } catch (IOException ex) {
+//            errorMessage = ErrorMessages.IO_OR_NOT_FOUND + absolutePath;
+//
+//            if (absolutePath.equals(siteUrl)) {
+//                currentSiteEntity.setStatus(StatusType.FAILED);
+//            }
+//            System.out.println(errorMessage);
+//
+//        } catch (DataIntegrityViolationException ex) {
+//            errorMessage = ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
+//                    (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
+//            System.out.println(errorMessage);
+//        }
         savePage(statusCode, htmlDoc.html(), relativePath);
         updateSiteStatus(errorMessage);
 
@@ -274,4 +281,29 @@ public class WebParser extends RecursiveTask<String> {
         siteRepository.saveAndFlush(currentSiteEntity);
         savePage(statusCode, "", relativePath);
     }
+
+    public String getAbsolutePath() {
+        return absolutePath;
+    }
+
+    public String getSiteUrl() {
+        return siteUrl;
+    }
+
+    public Connection.Response getResponse() {
+        return response;
+    }
+
+    public void setStatusCode(int statusCode) {
+        this.statusCode = statusCode;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
+    public void setCurrentSiteEntityStatus(StatusType statusType) {
+        this.currentSiteEntity.setStatus(statusType);
+    }
+
 }
