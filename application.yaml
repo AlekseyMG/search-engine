@@ -5,6 +5,7 @@ spring:
     username: root
     password: testtest
     url: jdbc:mysql://localhost:3306/search_engine?useSSL=false&requireSSL=false&allowPublicKeyRetrieval=true
+    driverClassName: com.mysql.cj.jdbc.Driver
   jpa:
     properties:
       hibernate:
@@ -16,7 +17,7 @@ spring:
         jdbc:
           batch_size: 10000 # entities (Used in BatchIndexWriter)
     hibernate:
-      ddl-auto: update # create-drop, create, update
+      ddl-auto: create # create-drop, create, update
     show-sql: false
 
 indexing-settings:
@@ -33,9 +34,10 @@ indexing-settings:
 parser-setting:
   user-agent: MG_Indexing_Bot/1.0.0 (Indexing and search engine)
   referrer: https://google.ru
-  random-delay-delta-before-connection: 2000 # ms
-  min-delay-before-connection: 1000 # ms (Connection to each page uses 1000(min-delay) + random 0-2000(delta))
-  connection-timeout: 10000 # ms
+  random-delay-delta-before-connection: 200 # ms
+  min-delay-before-connection: 300 # ms (Connection to each page uses 1000(min-delay) + random 0-2000(delta))
+  connection-timeout: 3000 # ms
+  batch-size: 10000 # entities (Used in BatchIndexWriter)
   cpu-for-pool: 10 # number of processors to use by the ForkJoinPool
 
 search-setting:
