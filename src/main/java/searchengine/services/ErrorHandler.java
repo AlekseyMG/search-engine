@@ -22,7 +22,7 @@ public class ErrorHandler {
     }
 
     private void SocketTimeout(Exception ex, WebParser webParser) {
-        String errorMessage = "";
+        String errorMessage;
         if (webParser.getResponse() != null) {
             webParser.setStatusCode(webParser.getResponse().statusCode());
         }
