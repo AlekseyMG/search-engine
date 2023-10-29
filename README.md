@@ -46,32 +46,32 @@ SearchEngine дает возможность собирать и искать и
 
 - Добавление сайтов для парсинга и поиска:
 
-![Демонстрация добавления сайтов](https://github.com/AlekseyMG/search-engine/assets/34042095/f14240b1-4e14-496e-9842-2a0ae94c7d52)
+![Демонстрация добавления сайтов](https://github.com/AlekseyMG/search-engine/assets/34042095/03d05ec3-d6e8-462f-af26-2b2638e4427c)
 <br>
 
 - Открытие интерфейса:
 
-![Демонстрация открытия интерфейса](https://github.com/AlekseyMG/search-engine/assets/34042095/3d9e81de-8da3-4c70-af88-e9da405c8e77)
+![Демонстрация открытия интерфейса](https://github.com/AlekseyMG/search-engine/assets/34042095/bcb900f1-e3af-462c-9197-30e4068f91c0)
 <br>
 
 - Запуск полной индексации по всем сайтам заданным ранее:
 
-![Демонстрация запуска полной индексации](https://github.com/AlekseyMG/search-engine/assets/34042095/bcd1927b-3020-4dd9-9990-f9f51e90b01f)
+![Демонстрация запуска полной индексации](https://github.com/AlekseyMG/search-engine/assets/34042095/489cb979-eff7-43dd-af21-ea774d4be811)
 <br>
 
 - Запуск полной индексации с последующей остановкой:
 
-![Демонстрация запуска полной индексации с остановкой](https://github.com/AlekseyMG/search-engine/assets/34042095/e9966d01-df10-4253-a10a-4a29c7b1c7a1)
+![Демонстрация запуска полной индексации с остановкой](https://github.com/AlekseyMG/search-engine/assets/34042095/0668ddee-47de-4e93-a2f2-d5271bc6da37)
 <br>
 
 - Индексация отдельной страницы:
 
-![Демонстрация индексации отдельной страницы](https://github.com/AlekseyMG/search-engine/assets/34042095/2b9194ea-7b22-411b-a4ba-efc94cb3c1f7)
+![Демонстрация индексации отдельной страницы](https://github.com/AlekseyMG/search-engine/assets/34042095/df8cb26b-a357-414e-9990-c800664ba22b)
 <br>
  
 - Работа поиска:
 
-![Демонстрация работы поиска](https://github.com/AlekseyMG/search-engine/assets/34042095/3e2789ae-274d-44ab-a5f8-0c3f1aeb38f6)
+![Демонстрация работы поиска](https://github.com/AlekseyMG/search-engine/assets/34042095/bd78c88d-faee-4bb2-b6e2-b493aa7e5758)
 <br>
  
  ---
@@ -79,7 +79,7 @@ SearchEngine дает возможность собирать и искать и
 ## Инструкция по запуску:
 **1.** Скомпилируйте код с помощью вкладки `Maven`, выбрав опции, как на снимке экрана дважды щелкнув по `spring-boot:build-image`:
 
-<img width="50%" alt="Необходимые параметры для компиляции приложения" src="https://github.com/AlekseyMG/search-engine/assets/34042095/0e366a6f-84de-4e21-a888-0ed86fade63c">
+<img width="50%" alt="Необходимые параметры для компиляции приложения" src="https://github.com/AlekseyMG/search-engine/assets/34042095/860d50ab-64d3-48e9-a1ba-9a10d9f77a94">
 <br>
 
 **2.** Дождитесь окончания упаковки проекта
@@ -88,14 +88,14 @@ SearchEngine дает возможность собирать и искать и
 
 **4.** Перейдите в папку `target` и скопируйте файл `SearchEngine-1.0.0.jar` в созданную Вами директорию
 
-<img width="50%" alt="Местонахождение файла SearchEngine-1.0.0.jar в проекте" src="https://github.com/AlekseyMG/search-engine/assets/34042095/53bfd104-c6ec-4a0c-8579-153778cbe4e6">
+<img width="50%" alt="Местонахождение файла SearchEngine-1.0.0.jar в проекте" src="https://github.com/AlekseyMG/search-engine/assets/34042095/f30ee645-f89c-4338-a91f-6c4d37084ada">
 <br>
 
 **5.** Скопируйте файл `application.yaml` из корня проекта в Вашу директорию:
 
 **6.** Настройте список сайтов для индексации в файле application.yaml (файл можно открыть с помощью любого текстового редактора). Пример настройки списка сайтов для индексации
 <figure>
-  <img width="50%" alt="Пример записи списка сайтов для индексации" src="https://github.com/AlekseyMG/search-engine/assets/34042095/f14240b1-4e14-496e-9842-2a0ae94c7d52">
+  <img width="50%" alt="Пример записи списка сайтов для индексации" src="https://github.com/AlekseyMG/search-engine/assets/34042095/03d05ec3-d6e8-462f-af26-2b2638e4427c">
   <br>
   <figcaption>
     <i>
@@ -127,4 +127,4 @@ SearchEngine дает возможность собирать и искать и
 
 - Схема MySQL:
 
-![Schema MySQL](https://github.com/AlekseyMG/search-engine/assets/34042095/18c297cf-9fb4-43f5-8e65-f6eef62a165f)
+![Schema MySQL](https://github.com/AlekseyMG/search-engine/assets/34042095/39c776c1-91d3-4eff-a28d-276260249f38)
