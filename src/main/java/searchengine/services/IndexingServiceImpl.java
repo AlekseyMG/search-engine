@@ -111,49 +111,50 @@ public class IndexingServiceImpl implements IndexingService {
             threads.forEach(Thread::interrupt);
             threads = new ArrayList<>();
         }
-        int parallelism = Math.max(1,
-                parserSetting.getCpuForPool() - settingSites.getSites().size());
-        settingSites.getSites().forEach(settingSite -> {
-            threads.add(
-                new Thread(()-> {
+        settingSites.getSites().forEach(settingSite ->
+            threads.add(new Thread(()-> {
                     Site newSite = getNewSiteEntity(settingSite);
 
                     WebParser webParser = new WebParser(
                             settingSite.getUrl(),
                             newSite,
                             this);
-
-                    try {
-                        pool = new ForkJoinPool(parallelism);
-                        pool.invoke(webParser);
-                    } catch (NullPointerException ex) {
-                        newSite.setLastError(ErrorMessages.IO_OR_NOT_FOUND);
-                        System.out.println("+++++ " + ex + " ++++++");
-                        newSite.setStatus(StatusType.FAILED);
-                    } catch (DataIntegrityViolationException ex) {
-                        newSite.setLastError(ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
-                                (ex.toString().contains("Duplicate") ?
-                                " (дубликат)" : ""));
-                    } catch (Exception ex) {
-                        newSite.setLastError(ErrorMessages.UNKNOWN_INDEXING_ERROR + ex);
-                        System.out.println("+++++ " + ex + " ++++++");
-                        ex.printStackTrace();
-                        newSite.setStatus(StatusType.FAILED);
-                    }
-                    finally {
-                        if (newSite.getStatus().equals(StatusType.INDEXING) && !isStoppedByUser) {
-                            newSite.setStatus(StatusType.INDEXED);
-                        }
-                    }
-                    newSite.setStatusTime(LocalDateTime.now());
-                    siteRepository.saveAndFlush(newSite);
-                    batchIndexWriter.close();
+                    runPool(webParser, newSite);
                 })
-            );
-        });
+            )
+        );
         threads.forEach(Thread::start);
     }
 
+    private void runPool(WebParser webParser, Site newSite) {
+        int parallelism = Math.max(1, parserSetting.getCpuForPool() - settingSites.getSites().size());
+
+        try {
+            pool = new ForkJoinPool(parallelism);
+            pool.invoke(webParser);
+        } catch (NullPointerException ex) {
+            newSite.setLastError(ErrorMessages.IO_OR_NOT_FOUND);
+            System.out.println("+++++ " + ex + " ++++++");
+            newSite.setStatus(StatusType.FAILED);
+        } catch (DataIntegrityViolationException ex) {
+            newSite.setLastError(ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
+                    (ex.toString().contains("Duplicate") ?
+                            " (дубликат)" : ""));
+        } catch (Exception ex) {
+            newSite.setLastError(ErrorMessages.UNKNOWN_INDEXING_ERROR + ex);
+            System.out.println("+++++ " + ex + " ++++++");
+            ex.printStackTrace();
+            newSite.setStatus(StatusType.FAILED);
+        }
+        finally {
+            if (newSite.getStatus().equals(StatusType.INDEXING) && !isStoppedByUser) {
+                newSite.setStatus(StatusType.INDEXED);
+            }
+        }
+        newSite.setStatusTime(LocalDateTime.now());
+        siteRepository.saveAndFlush(newSite);
+        batchIndexWriter.close();
+    }
     private void clearDataByUrlList() {
         List<Site> repositorySites = siteRepository.findAll();
         settingSites.getSites()
