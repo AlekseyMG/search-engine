@@ -43,7 +43,6 @@ public class BatchIndexWriter {
 
     public synchronized void bulkSave(List<Index> entities) throws ConstraintViolationException {
         StringBuilder insertQuery = new StringBuilder();
-        int i = 0;
         for (Index index : entities) {
             insertQuery.append(insertQuery.length() == 0 ? "" : ",")
                     .append("('")
