@@ -1,10 +1,12 @@
 package searchengine.services;
 
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import searchengine.dto.ErrorMessages;
 import searchengine.model.StatusType;
 
 @NoArgsConstructor
+@Slf4j(topic = "searchengine.services.WebParser")
 public class ErrorHandler {
     public void processError(Exception ex, WebParser webParser) {
         if (ex.toString().contains("UnknownHostException") || ex.toString().contains("IOException")) {
@@ -19,6 +21,7 @@ public class ErrorHandler {
         if (ex.toString().contains("DataIntegrityViolation")) {
             DataIntegrityViolation(ex, webParser);
         }
+        log.debug("", ex);
     }
 
     private void SocketTimeout(Exception ex, WebParser webParser) {
@@ -39,12 +42,12 @@ public class ErrorHandler {
         if (webParser.getAbsolutePath().equals(webParser.getSiteUrl())) {
             webParser.setCurrentSiteEntityStatus(StatusType.FAILED);
         }
-        System.out.println(errorMessage);
+        log.error(errorMessage);
     }
     private void Interrupted(WebParser webParser) {
         String errorMessage = ErrorMessages.ABORTED_BY_USER;
         webParser.setErrorMessage(errorMessage);
-        System.out.println(errorMessage);
+        log.error(errorMessage);
     }
 
     private void IOException(WebParser webParser) {
@@ -53,14 +56,13 @@ public class ErrorHandler {
         if (webParser.getAbsolutePath().equals(webParser.getSiteUrl())) {
             webParser.setCurrentSiteEntityStatus(StatusType.FAILED);
         }
-        System.out.println(errorMessage);
-
+        log.error(errorMessage);
     }
 
     private void DataIntegrityViolation(Exception ex, WebParser webParser) {
         String errorMessage = ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
                 (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
         webParser.setErrorMessage(errorMessage);
-        System.out.println(errorMessage);
+        log.error(errorMessage);
     }
 }

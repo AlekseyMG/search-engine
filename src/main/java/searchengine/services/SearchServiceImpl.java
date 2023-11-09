@@ -1,6 +1,7 @@
 package searchengine.services;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import org.jsoup.Jsoup;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,7 @@ import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SearchServiceImpl implements SearchService {
@@ -37,22 +39,35 @@ public class SearchServiceImpl implements SearchService {
     private boolean isLastSite = false;
     @Override
     public SearchResponse search(String query, String site, int offset, int limit) {
-        if (!searchResult.isEmpty() && query.equals(lastQuery) && site.equals(lastQuerySite)) {
-            return new SearchResponse(searchResult
-                    .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(offset, limit)),
-                    searchResult.size());
-        }
-        lastQuery = query;
-        lastQuerySite = site;
-        searchResult = new ArrayList<>();
-        pagesPercentForLemma = searchSetting.getPagesPercentForLemma();
+        log.info("search : query=\"" + query + "\", site=\"" + site + "\", offset=" + offset + ", limit=" + limit);
+        try {
 
-        if (site.isEmpty()) {
-            isLastSite = false;
-            return searchInAllSites(query, offset, limit, isLastSite);
+            if (!searchResult.isEmpty() && query.equals(lastQuery) && site.equals(lastQuerySite)) {
+                log.info("Возвращены страницы " + (getMinOffset(offset)) + "-" +
+                        (getMinOffset(offset) + getMinLimit(offset, limit)));
+                return new SearchResponse(searchResult
+                        .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(offset, limit)),
+                        searchResult.size());
+            }
+
+            lastQuery = query;
+            lastQuerySite = site;
+            searchResult = new ArrayList<>();
+            pagesPercentForLemma = searchSetting.getPagesPercentForLemma();
+
+            if (site.isEmpty()) {
+                isLastSite = false;
+                log.info("Ищем на всех сайтах");
+                return searchInAllSites(query, offset, limit, isLastSite);
+            }
+            isLastSite = true;
+            return searchInOneSite(query, site, offset, limit, isLastSite);
+
+        } catch (Exception ex) {
+            log.info("Ошибка поиска: " + ex);
+            log.debug("", ex);
+            return new SearchResponse(new ArrayList<>(),0);
         }
-        isLastSite = true;
-        return searchInOneSite(query, site, offset, limit, isLastSite);
     }
 
     private SearchResponse searchInAllSites(String query, int offset, int limit, boolean isLastSite) {
@@ -69,6 +84,7 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private SearchResponse searchInOneSite(String query, String site, int offset, int limit, boolean isLastSite) {
+        log.info("Ищем на сайте " + site);
         Set<String> lemmas = new HashSet<>();
 
         if (!query.isBlank()) {
@@ -90,9 +106,11 @@ public class SearchServiceImpl implements SearchService {
         }
         if (isLastSite) {
             setRelativeRelevance();
+            log.info("Всего найдено " + searchResult.size() + " страниц");
+            log.info("Возвращены страницы " + getMinOffset(offset) + "-" +
+                    (getMinOffset(offset) + getMinLimit(offset, limit)));
         }
         searchResult.sort(Comparator.comparingDouble(SearchItem::getRelevance).reversed());
-
         return new SearchResponse(searchResult
                 .subList(getMinOffset(offset), getMinOffset(offset) + getMinLimit(offset, limit)),
                 searchResult.size());
@@ -135,8 +153,10 @@ public class SearchServiceImpl implements SearchService {
             }
                 lemmaEntities.add(lemmaEntity);
         });
-        if (lemmaEntities.first().getFrequency() <= pagesCount / 100 * pagesPercentForLemma) {
-            return lemmaEntities;
+        if (!lemmaEntities.isEmpty()) {
+            if (lemmaEntities.first().getFrequency() <= pagesCount / 100 * pagesPercentForLemma) {
+                return lemmaEntities;
+            }
         }
         return new TreeSet<>(
                 Comparator.comparingDouble(Lemma::getFrequency).thenComparing(Lemma::getLemma)

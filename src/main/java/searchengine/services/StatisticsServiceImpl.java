@@ -1,6 +1,7 @@
 package searchengine.services;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import searchengine.dto.statistics.DetailedStatisticsItem;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.time.ZoneId;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class StatisticsServiceImpl implements StatisticsService {
@@ -48,6 +50,7 @@ public class StatisticsServiceImpl implements StatisticsService {
             total.setPages(total.getPages() + pages);
             total.setLemmas(total.getLemmas() + lemmas);
             detailed.add(item);
+            log.info(item.toString());
         });
 
         StatisticsResponse response = new StatisticsResponse();

@@ -5,6 +5,7 @@ import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +13,7 @@ import searchengine.config.ParserSetting;
 import searchengine.model.Index;
 import java.util.*;
 
+@Slf4j
 @Service
 @Getter
 @RequiredArgsConstructor
@@ -53,7 +55,7 @@ public class BatchIndexWriter {
                     .append("')");
         }
         String firstQueryPart = "INSERT INTO `index` (`lemma_id`, `page_id`, `rank`) VALUES ";
-        System.out.println(firstQueryPart + "of " + indices.size() + " index entities.");
+        log.info(firstQueryPart + "of " + indices.size() + " index entities.");
         Query query = entityManager.createNativeQuery(firstQueryPart + insertQuery);
         query.executeUpdate();
         entityManager.flush();

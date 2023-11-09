@@ -1,5 +1,6 @@
 package searchengine.services;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.RecursiveTask;
 
+@Slf4j
 public class WebParser extends RecursiveTask<String> {
     private final String absolutePath;
     private final String relativePath;
@@ -100,7 +102,8 @@ public class WebParser extends RecursiveTask<String> {
                     parserSetting.getRandomDelayDeltaBeforeConnection()) +
                     parserSetting.getMinDelayBeforeConnection());
 
-            System.out.println("Идем по ссылке - " + absolutePath);
+            log.info("Идем по ссылке - " + absolutePath);
+            //System.out.println("Идем по ссылке - " + absolutePath);
 
             Connection connection = Jsoup.connect(absolutePath);
             response = connection
@@ -193,6 +196,7 @@ public class WebParser extends RecursiveTask<String> {
             });
 
         } catch (IOException ex) {
+            log.info(ex.toString());
             ex.printStackTrace();
         }
     }
@@ -205,15 +209,19 @@ public class WebParser extends RecursiveTask<String> {
         indexingServiceImpl.getBatchIndexWriter().addForSave(index);
     }
 
-    public void deleteLemma(String url) {
+    public void deletePageFromRepository(String url) {
+        log.info("Пытаемся удалить: " + url);
+        log.info("Ищем страницу с путем: " + url.replaceAll(siteUrl,""));
+
         Page page = pageRepository.findBySiteIdAndPath(siteId, url.replaceAll(siteUrl,""));
 
-        System.out.println("Пытаемся удалить: " + url);
-        System.out.println("Ищем страницу с путем: " + url.replaceAll(siteUrl,""));
+//        System.out.println("Пытаемся удалить: " + url);
+//        System.out.println("Ищем страницу с путем: " + url.replaceAll(siteUrl,""));
 
         if (page != null) {
 
-            System.out.println("Удаляем страницу: " + url);
+//            System.out.println("Удаляем страницу: " + url);
+            log.info("Удаляем страницу: " + url);
 
             HashSet<Index> indexes = indexRepository.findByPageId(page.getId());
             indexRepository.deleteByPageId(page.getId());
@@ -228,6 +236,9 @@ public class WebParser extends RecursiveTask<String> {
                     lemmaRepository.saveAndFlush(lemma);
                 }
             });
+            log.info("Страница удалена!");
+        } else {
+            log.info("Страница не найдена!");
         }
     }
 
@@ -261,5 +272,4 @@ public class WebParser extends RecursiveTask<String> {
     public void setCurrentSiteEntityStatus(StatusType statusType) {
         this.currentSiteEntity.setStatus(statusType);
     }
-
 }

@@ -1,6 +1,9 @@
 server:
   port: 8080
 spring:
+  output:
+    ansi:
+      enabled: ALWAYS
   datasource:
     username: root
     password: testtest
@@ -45,3 +48,12 @@ search-setting:
   max-snippet-size: 280 # characters
   min-chars-count-around-word: 10 # characters (Minimum number of characters around the bolded word in snippet)
 
+logging:
+  level:
+    org.springframework.web: INFO
+    searchengine: INFO # INFO DEBUG ERROR
+  pattern:
+    console: "%clr(%d{yy-MM-dd E HH:mm:ss.SSS}){blue} %clr(%-5p) %clr(${PID}){faint} %clr(---){faint} %clr([%0.50t]){cyan} %clr(%15.50logger{0}){blue} %clr(:){red} %clr(%m){faint}%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ./logs/app.log

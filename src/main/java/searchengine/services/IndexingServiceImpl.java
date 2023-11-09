@@ -2,6 +2,7 @@ package searchengine.services;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import java.util.*;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 @Service
 @Getter
 @RequiredArgsConstructor
@@ -46,27 +48,31 @@ public class IndexingServiceImpl implements IndexingService {
 
     @Override
     public DefaultResponse stopIndexing() {
+        log.info("Запрос пользователя на останавку индексации");
         isStoppedByUser = true;
         while (pool.getActiveThreadCount() > 0) {}
         try {
             pool.shutdown();
             threads.forEach(Thread::interrupt);
         } catch (Exception ex) {
+            log.error(ErrorMessages.STOPPING_ERROR + ex);
             System.out.println(ErrorMessages.STOPPING_ERROR + ex);
         }
         batchIndexWriter.close();
-
+        log.info("Индексация остановлена пользователем");
         return new DefaultResponse();
     }
     @Override
     public DefaultResponse startIndexing() {
-//------------------------------------------------------------------// Отключена кнопка Start Indexing,
-        if (isStoppedByUser) {                                      // чтобы всякие хулиганы не запускали
-            return new ErrorResponse("Не трогай эту кнопку!"); //  долгую полную индексацию.
-        }                                                           // Закоментируйте этот код, чтобы включить
-//------------------------------------------------------------------// кнопку обратно и запустить индексацию.
+        log.info("Запускаем полную индексацию");
+////------------------------------------------------------------------// Отключена кнопка Start Indexing,
+//        if (isStoppedByUser) {                                      // чтобы всякие хулиганы не запускали
+//            return new ErrorResponse("Не трогай эту кнопку!"); //  долгую полную индексацию.
+//        }                                                           // Закоментируйте этот код, чтобы включить
+////------------------------------------------------------------------// кнопку обратно и запустить индексацию.
         for (Thread thread : threads) {
             if (thread.isAlive()) {
+                log.error(ErrorMessages.INDEXING_HAS_ALREADY_STARTED);
                 return new ErrorResponse(ErrorMessages.INDEXING_HAS_ALREADY_STARTED);
             }
         }
@@ -78,7 +84,9 @@ public class IndexingServiceImpl implements IndexingService {
     }
     @Override
     public DefaultResponse indexPage(String absolutePath) {
+        log.info("Запускаем индексацию страницы " + absolutePath);
         if (isMatchedWithSkipList(absolutePath)) {
+            log.error(ErrorMessages.INVALID_CHARACTERS_IN_THE_ADDRESS);
             return new ErrorResponse(ErrorMessages.INVALID_CHARACTERS_IN_THE_ADDRESS);
         }
         List<Site> sites = siteRepository.findAll().stream().filter(site ->
@@ -86,6 +94,7 @@ public class IndexingServiceImpl implements IndexingService {
                         site.getUrl().replaceAll("www.",""))).toList();
 
         if (sites.isEmpty()) {
+            log.error(ErrorMessages.OUT_OF_SITE);
             return new ErrorResponse(ErrorMessages.OUT_OF_SITE);
         }
 
@@ -94,15 +103,17 @@ public class IndexingServiceImpl implements IndexingService {
 
         new  Thread(()-> {
             WebParser webParser = new WebParser(absolutePath, site,this);
-            webParser.deleteLemma(absolutePath);
+            webParser.deletePageFromRepository(absolutePath);
             statusCode.set(webParser.updateOnePage());
            }).start();
 
         while (statusCode.get() == 0) {}
         if (statusCode.get() != 200) {
+            log.error(ErrorMessages.PAGE_IS_NOT_AVAILABLE);
             return new ErrorResponse(ErrorMessages.PAGE_IS_NOT_AVAILABLE);
         }
         batchIndexWriter.close();
+        log.info("Страница проиндексирована");
         return new DefaultResponse();
     }
 
@@ -134,20 +145,24 @@ public class IndexingServiceImpl implements IndexingService {
             pool.invoke(webParser);
         } catch (NullPointerException ex) {
             newSite.setLastError(ErrorMessages.IO_OR_NOT_FOUND);
-            System.out.println("+++++ " + ex + " ++++++");
+            log.error(ErrorMessages.IO_OR_NOT_FOUND);
+            log.debug(ErrorMessages.IO_OR_NOT_FOUND, ex);
             newSite.setStatus(StatusType.FAILED);
         } catch (DataIntegrityViolationException ex) {
-            newSite.setLastError(ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
-                    (ex.toString().contains("Duplicate") ?
-                            " (дубликат)" : ""));
+            String error = ErrorMessages.ERROR_ADD_ENTITY_TO_DB +
+                    (ex.toString().contains("Duplicate") ? " (дубликат)" : "");
+            newSite.setLastError(error);
+            log.error(error);
+            log.debug(error, ex);
         } catch (Exception ex) {
             newSite.setLastError(ErrorMessages.UNKNOWN_INDEXING_ERROR + ex);
-            System.out.println("+++++ " + ex + " ++++++");
-            ex.printStackTrace();
+            log.error(ErrorMessages.UNKNOWN_INDEXING_ERROR + ex);
+            log.debug(ErrorMessages.UNKNOWN_INDEXING_ERROR, ex);
             newSite.setStatus(StatusType.FAILED);
         }
         finally {
             if (newSite.getStatus().equals(StatusType.INDEXING) && !isStoppedByUser) {
+                log.info("Сайт " + newSite.getName() + " проиндексирован.");
                 newSite.setStatus(StatusType.INDEXED);
             }
         }
@@ -198,20 +213,20 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void deleteSiteInfo(Site site) {
-        System.out.println("Удаляем все для сайта №" + site.getId() +
+        log.info("Удаляем все для сайта №" + site.getId() +
                 " " + site.getName());
 
-        System.out.println("Удаляем из таблицы index");
+        log.info("Удаляем из таблицы index");
         pageRepository.findPagesBySiteId(site.getId())
                 .forEach(page -> indexRepository.deleteByPageId(page.getId()));
 
-        System.out.println("Удаляем из таблицы lemma");
+        log.info("Удаляем из таблицы lemma");
         lemmaRepository.deleteBySiteId(site.getId());
 
-        System.out.println("Удаляем из таблицы page");
+        log.info("Удаляем из таблицы page");
         pageRepository.deleteBySiteId(site.getId());
 
-        System.out.println("Удаляем из таблицы site");
+        log.info("Удаляем из таблицы site");
         siteRepository.deleteBySiteId(site.getId());
     }
 

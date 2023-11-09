@@ -3,10 +3,12 @@ package searchengine.dto;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 import java.util.Objects;
 
 @Getter
 @Setter
+@ToString
 @AllArgsConstructor
 public class SearchItem {
     private String site;
